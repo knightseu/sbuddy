@@ -168,9 +168,27 @@ export class AoPSScraper {
       // Try alternative selector
       const altHeading = $('.mw-headline:contains("Problem")').parent();
       if (altHeading.length === 0) {
-        return null;
+        // No "Problem" heading found - try to extract content before first h2
+        // This handles pages where problem text appears directly without a heading
+        const parserOutput = $('#mw-content-text .mw-parser-output');
+
+        if (parserOutput.length > 0) {
+          // Get all direct children before the first h2 (direct child)
+          const firstH2 = parserOutput.children('h2').first();
+          if (firstH2.length > 0) {
+            contentElements = firstH2.prevAll().filter('p, dl, ul, ol');
+          } else {
+            // No h2 found, try to get first few paragraphs
+            contentElements = parserOutput.children('p').slice(0, 3);
+          }
+        }
+
+        if (!contentElements || contentElements.length === 0) {
+          return null;
+        }
+      } else {
+        contentElements = altHeading.nextUntil('h2');
       }
-      contentElements = altHeading.nextUntil('h2');
     } else {
       // Get all siblings until the next h2 (Solution section)
       contentElements = problemHeading.nextUntil('h2');
@@ -180,9 +198,10 @@ export class AoPSScraper {
       return null;
     }
 
-    // Extract text with LaTeX from all content elements
+    // Extract text with LaTeX from all content elements (in reverse order since we used prevAll)
     let fullContent = '';
-    contentElements.each((_, element) => {
+    const elementsArray = contentElements.toArray().reverse();
+    elementsArray.forEach((element) => {
       const text = this.extractTextWithLatex($(element));
       if (text.trim()) {
         fullContent += text + ' ';

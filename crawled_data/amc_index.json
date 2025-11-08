@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2025-11-02T03:30:00.000Z",
-  "totalTests": 32,
-  "successfulTests": 32,
+  "generatedAt": "2025-11-07T00:00:00.000Z",
+  "totalTests": 33,
+  "successfulTests": 33,
   "failedTests": 0,
   "tests": [
     {
@@ -259,6 +259,15 @@
       "problemCount": 25,
       "filePath": "crawled_data/amc_2024_10b_problems.json",
       "source": "https://artofproblemsolving.com/wiki/index.php/2024_AMC_10B_Problems"
+    },
+    {
+      "year": 2025,
+      "variant": "A",
+      "test": "AMC 10A",
+      "problemCount": 24,
+      "filePath": "crawled_data/amc_2025_10a_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2025_AMC_10A_Problems",
+      "note": "Partial: 24/25 problems available (Problem 19 missing)"
     }
   ]
 }

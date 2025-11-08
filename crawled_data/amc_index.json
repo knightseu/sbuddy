@@ -1,9 +1,41 @@
 {
-  "generatedAt": "2025-10-20T03:53:37.670Z",
-  "totalTests": 26,
-  "successfulTests": 26,
+  "generatedAt": "2025-11-02T03:30:00.000Z",
+  "totalTests": 32,
+  "successfulTests": 32,
   "failedTests": 0,
   "tests": [
+    {
+      "year": 2010,
+      "variant": "A",
+      "test": "AMC 10A",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2010_10a_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2010_AMC_10A_Problems"
+    },
+    {
+      "year": 2010,
+      "variant": "B",
+      "test": "AMC 10B",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2010_10b_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2010_AMC_10B_Problems"
+    },
+    {
+      "year": 2011,
+      "variant": "A",
+      "test": "AMC 10A",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2011_10a_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2011_AMC_10A_Problems"
+    },
+    {
+      "year": 2011,
+      "variant": "B",
+      "test": "AMC 10B",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2011_10b_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2011_AMC_10B_Problems"
+    },
     {
       "year": 2012,
       "variant": "A",
@@ -151,7 +183,7 @@
     {
       "year": 2021,
       "variant": "A",
-      "test": "AMC 10A",
+      "test": "AMC 10A (Spring)",
       "problemCount": 25,
       "filePath": "crawled_data/amc_2021_10a_problems.json",
       "source": "https://artofproblemsolving.com/wiki/index.php/2021_AMC_10A_Problems"
@@ -159,10 +191,26 @@
     {
       "year": 2021,
       "variant": "B",
-      "test": "AMC 10B",
+      "test": "AMC 10B (Spring)",
       "problemCount": 25,
       "filePath": "crawled_data/amc_2021_10b_problems.json",
       "source": "https://artofproblemsolving.com/wiki/index.php/2021_AMC_10B_Problems"
+    },
+    {
+      "year": 2021,
+      "variant": "A",
+      "test": "AMC 10A (Fall)",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2021_fall_10a_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2021_Fall_AMC_10A_Problems"
+    },
+    {
+      "year": 2021,
+      "variant": "B",
+      "test": "AMC 10B (Fall)",
+      "problemCount": 25,
+      "filePath": "crawled_data/amc_2021_fall_10b_problems.json",
+      "source": "https://artofproblemsolving.com/wiki/index.php/2021_Fall_AMC_10B_Problems"
     },
     {
       "year": 2022,

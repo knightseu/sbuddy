@@ -105,8 +105,13 @@ export class AoPSScraper {
     return problems;
   }
 
-  private async scrapeProblem(year: number, test: 'A' | 'B', problemNum: number): Promise<AMCProblem | null> {
-    const url = `${this.baseUrl}/${year}_AMC_10${test}_Problems/Problem_${problemNum}`;
+  private async scrapeProblem(year: number, test: 'A' | 'B', problemNum: number, season?: 'Fall' | 'Spring'): Promise<AMCProblem | null> {
+    // Handle special naming for 2021 Fall
+    let urlPath = `${year}_AMC_10${test}`;
+    if (season === 'Fall') {
+      urlPath = `${year}_Fall_AMC_10${test}`;
+    }
+    const url = `${this.baseUrl}/${urlPath}_Problems/Problem_${problemNum}`;
 
     try {
       const response = await axios.get(url);
@@ -491,14 +496,15 @@ export class AoPSScraper {
   }
 
   // Method to scrape a specific test for testing
-  async scrapeSpecificTest(year: number, test: 'A' | 'B', problemCount: number = 5): Promise<AMCProblem[]> {
-    console.log(`Scraping ${year} AMC 10${test} (first ${problemCount} problems)...`);
+  async scrapeSpecificTest(year: number, test: 'A' | 'B', problemCount: number = 5, season?: 'Fall' | 'Spring'): Promise<AMCProblem[]> {
+    const seasonStr = season ? ` ${season}` : '';
+    console.log(`Scraping ${year}${seasonStr} AMC 10${test} (first ${problemCount} problems)...`);
 
     const problems: AMCProblem[] = [];
 
     for (let problemNum = 1; problemNum <= problemCount; problemNum++) {
       try {
-        const problem = await this.scrapeProblem(year, test, problemNum);
+        const problem = await this.scrapeProblem(year, test, problemNum, season);
         if (problem) {
           problems.push(problem);
           console.log(`✓ Problem ${problemNum}: ${problem.content.substring(0, 100)}...`);

@@ -257,7 +257,11 @@
 
         function sanitizeCurrency(text) {
             if (!text) return text;
-            return text.replace(/\$\$(\s*\d[\d.,]*)\$/g, (match, amount) => `\\$${amount.trim()}$`);
+            // Handle $ $X$ pattern (dollar space dollar number dollar) - fix spacing issue
+            let result = text.replace(/\$ \$(\d[\d.,]*)\$/g, (match, amount) => `\\$${amount.trim()}`);
+            // Handle $$X$ pattern (dollar dollar number dollar)
+            result = result.replace(/\$\$(\s*\d[\d.,]*)\$/g, (match, amount) => `\\$${amount.trim()}`);
+            return result;
         }
 
         function formatSolutionWithDiagrams(solution) {

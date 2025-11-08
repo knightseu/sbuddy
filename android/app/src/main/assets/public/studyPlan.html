@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Plan - AMC Problems</title>
+    <!-- MathJax for LaTeX rendering -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            /* Mobile safe area support */
+            padding-top: max(20px, env(safe-area-inset-top));
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .header-actions {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            min-height: 44px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .plan-manager {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .plan-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .plan-selector select {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 16px;
+            min-height: 44px;
+        }
+
+        .plan-actions button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 10px;
+            min-height: 44px;
+        }
+
+        .plan-actions button:hover {
+            background: #5568d3;
+        }
+
+        .problem-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .problem-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 25px;
+            transition: all 0.3s;
+        }
+
+        .problem-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .problem-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .problem-number-link {
+            color: #667eea;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .problem-number-link:hover {
+            text-decoration: underline;
+        }
+
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            min-height: 44px;
+        }
+
+        .remove-btn:hover {
+            background: #c82333;
+        }
+
+        .problem-content {
+            color: #495057;
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 10px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                max-width: 100%;
+            }
+
+            .header-actions,
+            .plan-manager,
+            .remove-btn {
+                display: none !important;
+            }
+
+            .problem-card {
+                page-break-inside: avoid;
+                border: 1px solid #ccc;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-actions">
+                <button class="btn" onclick="window.print()">🖨️ Print</button>
+                <a href="index.html" class="btn">← Back to Problems</a>
+            </div>
+            <h1 id="planTitle">Study Plan</h1>
+            <p id="planSubtitle">0 problems selected</p>
+        </div>
+
+        <div class="content">
+            <div class="plan-manager">
+                <div class="plan-selector">
+                    <select id="planSelect" onchange="switchPlan()">
+                        <option value="default">My Study Plan</option>
+                    </select>
+                </div>
+                <div class="plan-actions">
+                    <button onclick="createNewPlan()">➕ New Plan</button>
+                    <button onclick="renamePlan()">✏️ Rename</button>
+                    <button onclick="deletePlan()">🗑️ Delete</button>
+                    <button onclick="saveToFile()">💾 Save to File</button>
+                    <button onclick="loadFromFile()">📂 Load from File</button>
+                </div>
+            </div>
+
+            <div class="problem-list" id="problemList">
+                <div class="empty-state">
+                    <h2>No problems in this study plan</h2>
+                    <p>Go to the <a href="index.html">problem list</a> to add problems</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="studyPlan.js"></script>
+    <script>
+        let allProblems = [];
+        let problemsWithTest = []; // Store problems with their test file info
+        let mathJaxPoll = null;
+
+        function sanitizeCurrency(text) {
+            if (!text) return text;
+            return text.replace(/\$\$(\s*\d[\d.,]*)\$/g, (match, amount) => `\\$${amount.trim()}$`);
+        }
+
+        function formatSolutionWithDiagrams(solution) {
+            const sanitized = sanitizeCurrency(solution);
+            // Convert [katex]...[/katex] to $...$ for MathJax
+            const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
+            return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
+                return `<div style="margin: 12px 0; text-align: center;">
+                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: 100%; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
+                </div>`;
+            });
+        }
+
+        function formatChoice(choice) {
+            if (!choice) return choice;
+            // First apply standard formatting
+            let formatted = formatSolutionWithDiagrams(choice);
+            // If contains LaTeX commands but not wrapped in $...$ or $$...$$, wrap it
+            if (/\\[a-zA-Z]+/.test(formatted) && !formatted.includes('$')) {
+                formatted = `$${formatted}$`;
+            }
+            return formatted;
+        }
+
+        function formatProblemContent(content) {
+            return formatSolutionWithDiagrams(content).replace(/\n/g, '<br>');
+        }
+
+        function typesetMath(element) {
+            if (!element) return;
+
+            const render = () => {
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([element]).catch(err => console.log('MathJax error:', err));
+                }
+            };
+
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                render();
+            } else {
+                if (mathJaxPoll) {
+                    clearInterval(mathJaxPoll);
+                }
+
+                mathJaxPoll = setInterval(() => {
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        clearInterval(mathJaxPoll);
+                        mathJaxPoll = null;
+                        render();
+                    }
+                }, 100);
+
+                setTimeout(() => {
+                    if (mathJaxPoll) {
+                        clearInterval(mathJaxPoll);
+                        mathJaxPoll = null;
+                    }
+                }, 5000);
+            }
+        }
+
+        async function loadProblems() {
+            try {
+                // Load index to get all tests
+                const indexResponse = await fetch('data/amc_index.json');
+                const indexData = await indexResponse.json();
+
+                // Load all test files
+                const testPromises = indexData.tests.map(async (test) => {
+                    const response = await fetch(test.filePath);
+                    const data = await response.json();
+                    // Tag each problem with its test file
+                    return data.problems.map(p => ({
+                        ...p,
+                        testFile: test.filePath.split('/').pop(),
+                        testName: `${test.year} ${test.test}`
+                    }));
+                });
+
+                const allTestProblems = await Promise.all(testPromises);
+                problemsWithTest = allTestProblems.flat();
+
+                // For backward compatibility, also create allProblems without test info
+                allProblems = problemsWithTest;
+
+                renderStudyPlan();
+                loadPlanList();
+            } catch (error) {
+                console.error('Error loading problems:', error);
+                document.getElementById('problemList').innerHTML =
+                    '<div class="error">Error loading problems. Make sure you have crawled some tests.</div>';
+            }
+        }
+
+        function renderStudyPlan() {
+            const plan = window.studyPlanManager.getActivePlan();
+            document.getElementById('planTitle').textContent = plan.name;
+            document.getElementById('planSubtitle').textContent =
+                `${plan.problems.length} problem${plan.problems.length !== 1 ? 's' : ''} selected`;
+
+            if (plan.problems.length === 0) {
+                document.getElementById('problemList').innerHTML = `
+                    <div class="empty-state">
+                        <h2>No problems in this study plan</h2>
+                        <p>Go to the <a href="index.html">problem list</a> to add problems</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Filter problems to match both problem number AND test file
+            const problemsInPlan = allProblems.filter(p => {
+                return plan.problems.some(planProblem => {
+                    // Handle old format (just numbers)
+                    if (typeof planProblem === 'number') {
+                        return planProblem === p.problemNumber;
+                    }
+                    // Handle new format ({testFile, problemNumber})
+                    if (typeof planProblem === 'object' && planProblem.problemNumber) {
+                        return planProblem.problemNumber === p.problemNumber &&
+                               planProblem.testFile === p.testFile;
+                    }
+                    return false;
+                });
+            });
+
+            const html = problemsInPlan.map(problem => {
+                const formattedContent = formatProblemContent(problem.content || '');
+                return `
+                <div class="problem-card">
+                    <div class="problem-header">
+                        <div>
+                            <a href="problem.html?number=${problem.problemNumber}&test=${problem.testFile || 'amc_2012_10a_problems.json'}" class="problem-number-link">
+                                Problem ${problem.problemNumber}
+                            </a>
+                            ${problem.testName ? `<span style="color: #6c757d; font-size: 0.9rem; margin-left: 10px;">(${problem.testName})</span>` : ''}
+                        </div>
+                        <button class="remove-btn" onclick="removeProblem(${problem.problemNumber}, '${problem.testFile || ''}')">
+                            ✕ Remove
+                        </button>
+                    </div>
+                    <div class="problem-content">
+                        ${formattedContent}
+                    </div>
+                </div>
+            `;
+            }).join('');
+
+            const listEl = document.getElementById('problemList');
+            listEl.innerHTML = html;
+            typesetMath(listEl);
+        }
+
+        function loadPlanList() {
+            const plans = window.studyPlanManager.getPlans();
+            const activePlanId = window.studyPlanManager.getActivePlanId();
+            const select = document.getElementById('planSelect');
+
+            select.innerHTML = Object.values(plans).map(plan =>
+                `<option value="${plan.id}" ${plan.id === activePlanId ? 'selected' : ''}>
+                    ${plan.name}
+                </option>`
+            ).join('');
+        }
+
+        function switchPlan() {
+            const select = document.getElementById('planSelect');
+            window.studyPlanManager.setActivePlan(select.value);
+            renderStudyPlan();
+        }
+
+        function createNewPlan() {
+            const name = prompt('Enter name for new study plan:');
+            if (name) {
+                window.studyPlanManager.createPlan(name);
+                loadPlanList();
+                renderStudyPlan();
+            }
+        }
+
+        function renamePlan() {
+            const activePlanId = window.studyPlanManager.getActivePlanId();
+            const currentName = window.studyPlanManager.getActivePlan().name;
+            const newName = prompt('Enter new name:', currentName);
+            if (newName && newName !== currentName) {
+                window.studyPlanManager.renamePlan(activePlanId, newName);
+                loadPlanList();
+                renderStudyPlan();
+            }
+        }
+
+        function deletePlan() {
+            const activePlanId = window.studyPlanManager.getActivePlanId();
+            if (activePlanId === 'default') {
+                alert('Cannot delete the default plan');
+                return;
+            }
+
+            if (confirm('Are you sure you want to delete this study plan?')) {
+                window.studyPlanManager.deletePlan(activePlanId);
+                loadPlanList();
+                renderStudyPlan();
+            }
+        }
+
+        function removeProblem(problemNumber, testFile) {
+            window.studyPlanManager.removeProblem(problemNumber, testFile);
+            renderStudyPlan();
+        }
+
+        function saveToFile() {
+            // Get all study plans from localStorage
+            const plans = window.studyPlanManager.getPlans();
+
+            // Create a JSON blob
+            const dataStr = JSON.stringify(plans, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+
+            // Create download link
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `study-plans-${new Date().toISOString().split('T')[0]}.json`;
+
+            // Trigger download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            alert('Study plans saved to file!');
+        }
+
+        function loadFromFile() {
+            // Create file input
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    const loadedPlans = JSON.parse(text);
+
+                    // Validate the loaded data
+                    if (typeof loadedPlans !== 'object' || !loadedPlans) {
+                        throw new Error('Invalid study plan file format');
+                    }
+
+                    // Ask user for confirmation
+                    const confirmMessage = `This will load ${Object.keys(loadedPlans).length} study plan(s). Current plans will be replaced. Continue?`;
+                    if (!confirm(confirmMessage)) {
+                        return;
+                    }
+
+                    // Save to localStorage using the correct keys from StudyPlanManager
+                    localStorage.setItem('amc_study_plans', JSON.stringify(loadedPlans));
+
+                    // Set the first plan as active (or 'default' if it exists)
+                    const activePlanId = loadedPlans['default'] ? 'default' : Object.keys(loadedPlans)[0];
+                    localStorage.setItem('amc_active_plan', activePlanId);
+
+                    // Reload the page to reflect changes
+                    location.reload();
+                } catch (error) {
+                    console.error('Error loading study plans:', error);
+                    alert('Error loading study plans: ' + error.message);
+                }
+            };
+
+            // Trigger file selection
+            input.click();
+        }
+
+        // Load on page load
+        loadProblems();
+    </script>
+</body>
+</html>

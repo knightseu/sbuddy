@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMC Problems Viewer - 2012 AMC 10A</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .metadata {
+            background: #f8f9fa;
+            padding: 30px 40px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .metadata h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .metadata-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .metadata-item label {
+            display: block;
+            font-size: 0.85rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .metadata-item .value {
+            font-size: 1.5rem;
+            color: #667eea;
+            font-weight: 700;
+        }
+
+        .stats {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .stat-badge.easy { background: #28a745; }
+        .stat-badge.medium { background: #ffc107; color: #333; }
+        .stat-badge.hard { background: #dc3545; }
+
+        .problems-section {
+            padding: 40px;
+        }
+
+        .problems-section h2 {
+            color: #495057;
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+        }
+
+        .filter-controls {
+            margin-bottom: 25px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .problems-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .problem-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .problem-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .problem-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .problem-content {
+            flex: 1;
+        }
+
+        .problem-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .problem-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+        }
+
+        .difficulty-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .difficulty-badge.easy { background: #d4edda; color: #155724; }
+        .difficulty-badge.medium { background: #fff3cd; color: #856404; }
+        .difficulty-badge.hard { background: #f8d7da; color: #721c24; }
+
+        .problem-preview {
+            color: #6c757d;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .problem-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .problem-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+            font-size: 1.2rem;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .metadata-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .problem-card {
+                flex-direction: column;
+            }
+
+            .problem-number {
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+        }
+
+        /* Study Plan Styles */
+        .study-plan-header {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .plan-selector-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .plan-dropdown-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+            justify-content: space-between;
+        }
+
+        .plan-dropdown-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .plan-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            background: white;
+            min-width: 220px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            border-radius: 8px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .plan-dropdown-content.show {
+            display: block;
+        }
+
+        .plan-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            color: #333;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .plan-option:hover {
+            background: #f8f9fa;
+        }
+
+        .plan-option.active {
+            background: #e7f3ff;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .plan-count-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .plan-option.active .plan-count-badge {
+            background: white;
+            color: #667eea;
+        }
+
+        .plan-divider {
+            height: 1px;
+            background: #dee2e6;
+            margin: 5px 0;
+        }
+
+        .plan-action {
+            padding: 12px 16px;
+            cursor: pointer;
+            color: #667eea;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .plan-action:hover {
+            background: #f8f9fa;
+        }
+
+        .study-plan-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .study-plan-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .study-plan-count {
+            background: white;
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .add-to-plan-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .add-to-plan-btn:hover {
+            background: #218838;
+        }
+
+        .add-to-plan-btn.in-plan {
+            background: #6c757d;
+        }
+
+        .add-to-plan-btn.in-plan:hover {
+            background: #5a6268;
+        }
+    </style>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header" style="position: relative;">
+            <div class="study-plan-header">
+                <div class="plan-selector-dropdown">
+                    <button class="plan-dropdown-btn" onclick="togglePlanDropdown()">
+                        <span id="currentPlanName">My Study Plan</span>
+                        <span>▼</span>
+                    </button>
+                    <div class="plan-dropdown-content" id="planDropdown">
+                        <!-- Plans will be loaded here -->
+                    </div>
+                </div>
+                <a href="studyPlan.html" class="study-plan-btn" id="viewStudyPlanBtn">
+                    📚 View Plan
+                    <span class="study-plan-count" id="planCount">0</span>
+                </a>
+            </div>
+            <h1>AMC Problems Viewer</h1>
+            <p id="testDescription">Interactive Problem Browser</p>
+        </div>
+
+        <div class="test-selector-section" style="background: #f8f9fa; padding: 20px; margin: 20px 40px; border-radius: 12px;">
+            <label for="testSelector" style="font-weight: 600; margin-right: 10px;">Select Test:</label>
+            <select id="testSelector" onchange="switchTest()" style="padding: 10px; border: 2px solid #667eea; border-radius: 8px; font-size: 1rem; min-width: 200px;">
+                <option value="">Loading tests...</option>
+            </select>
+        </div>
+
+        <div class="metadata" id="metadata">
+            <div class="loading">Loading metadata...</div>
+        </div>
+
+        <div class="problems-section">
+            <h2>Problems</h2>
+            <div class="filter-controls" id="filters">
+                <button class="filter-btn active" data-filter="all">All Problems</button>
+                <button class="filter-btn" data-filter="easy">Easy</button>
+                <button class="filter-btn" data-filter="medium">Medium</button>
+                <button class="filter-btn" data-filter="hard">Hard</button>
+            </div>
+            <div class="problems-list" id="problemsList">
+                <div class="loading">Loading problems...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allProblems = [];
+        let currentFilter = 'all';
+        let availableTests = [];
+        let currentTest = null;
+        let mathJaxPoll = null;
+
+        function sanitizeCurrency(text) {
+            if (!text) return text;
+            return text.replace(/\$\$(\s*\d[\d.,]*)\$/g, (match, amount) => `\\$${amount.trim()}$`);
+        }
+
+        function formatSolutionWithDiagrams(solution) {
+            const sanitized = sanitizeCurrency(solution);
+            // Convert [katex]...[/katex] to $...$ for MathJax
+            const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
+            return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
+                return `<div style="margin: 12px 0; text-align: center;">
+                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: 100%; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
+                </div>`;
+            });
+        }
+
+        function formatChoice(choice) {
+            if (!choice) return choice;
+            // First apply standard formatting
+            let formatted = formatSolutionWithDiagrams(choice);
+            // If contains LaTeX commands but not wrapped in $...$ or $$...$$, wrap it
+            if (/\\[a-zA-Z]+/.test(formatted) && !formatted.includes('$')) {
+                formatted = `$${formatted}$`;
+            }
+            return formatted;
+        }
+
+        function formatProblemPreview(content) {
+            return formatSolutionWithDiagrams(content).replace(/\n/g, '<br>');
+        }
+
+        function typesetMath(element) {
+            if (!element) return;
+
+            const render = () => {
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([element]).catch(err => console.log('MathJax error:', err));
+                }
+            };
+
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                render();
+            } else {
+                if (mathJaxPoll) {
+                    clearInterval(mathJaxPoll);
+                }
+
+                mathJaxPoll = setInterval(() => {
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        clearInterval(mathJaxPoll);
+                        mathJaxPoll = null;
+                        render();
+                    }
+                }, 100);
+
+                setTimeout(() => {
+                    if (mathJaxPoll) {
+                        clearInterval(mathJaxPoll);
+                        mathJaxPoll = null;
+                    }
+                }, 5000);
+            }
+        }
+
+        // Load index and populate test selector
+        async function loadIndex() {
+            try {
+                const response = await fetch('data/amc_index.json');
+                const indexData = await response.json();
+                availableTests = indexData.tests;
+
+                // Populate test selector
+                const selector = document.getElementById('testSelector');
+                selector.innerHTML = availableTests.map((test, index) =>
+                    `<option value="${index}">${test.year} ${test.test} (${test.problemCount} problems)</option>`
+                ).join('');
+
+                // Load first test by default
+                if (availableTests.length > 0) {
+                    currentTest = availableTests[0];
+                    await loadTest(currentTest);
+                }
+            } catch (error) {
+                console.error('Error loading index:', error);
+                document.getElementById('testSelector').innerHTML =
+                    '<option value="">Error loading tests</option>';
+            }
+        }
+
+        // Load a specific test
+        async function loadTest(test) {
+            try {
+                const response = await fetch(`../../${test.filePath}`);
+                const data = await response.json();
+
+                // Update header
+                document.getElementById('testDescription').textContent =
+                    `${test.year} ${test.test} - Interactive Problem Browser`;
+
+                displayMetadata(data.metadata, data.problems);
+                allProblems = data.problems;
+                currentFilter = 'all';
+
+                // Reset filter buttons
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.filter === 'all') btn.classList.add('active');
+                });
+
+                displayProblems(allProblems);
+                setupFilters();
+            } catch (error) {
+                document.getElementById('metadata').innerHTML =
+                    '<div class="error">Error loading test data: ' + error.message + '</div>';
+                document.getElementById('problemsList').innerHTML =
+                    '<div class="error">Failed to load problems</div>';
+            }
+        }
+
+        // Switch test when selector changes
+        async function switchTest() {
+            const selector = document.getElementById('testSelector');
+            const testIndex = parseInt(selector.value);
+            if (testIndex >= 0 && testIndex < availableTests.length) {
+                currentTest = availableTests[testIndex];
+                await loadTest(currentTest);
+            }
+        }
+
+        // Initialize - load index first
+        async function loadData() {
+            await loadIndex();
+        }
+
+        function displayMetadata(metadata, problems) {
+            const difficultyCount = problems.reduce((acc, p) => {
+                acc[p.difficulty] = (acc[p.difficulty] || 0) + 1;
+                return acc;
+            }, {});
+
+            const avgSolutions = (problems.reduce((sum, p) => sum + (p.solutions?.length || 0), 0) / problems.length).toFixed(1);
+
+            const html = `
+                <h2>Dataset Information</h2>
+                <div class="metadata-grid">
+                    <div class="metadata-item">
+                        <label>Year</label>
+                        <div class="value">${metadata.year}</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Test</label>
+                        <div class="value">${metadata.test}</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Total Problems</label>
+                        <div class="value">${metadata.totalProblems}</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Avg Solutions</label>
+                        <div class="value">${avgSolutions}</div>
+                    </div>
+                </div>
+                <div class="stats">
+                    <span class="stat-badge easy">Easy: ${difficultyCount.easy || 0}</span>
+                    <span class="stat-badge medium">Medium: ${difficultyCount.medium || 0}</span>
+                    <span class="stat-badge hard">Hard: ${difficultyCount.hard || 0}</span>
+                    <span class="stat-badge">Crawled: ${new Date(metadata.crawledAt).toLocaleDateString()}</span>
+                </div>
+            `;
+
+            document.getElementById('metadata').innerHTML = html;
+        }
+
+        function displayProblems(problems) {
+            const testFile = currentTest ? currentTest.filePath.split('/').pop() : 'amc_2012_10a_problems.json';
+
+            const html = problems.map(problem => {
+                const inPlan = window.studyPlanManager.isProblemInPlan(problem.problemNumber, testFile);
+                const previewContent = formatProblemPreview(problem.content);
+                return `
+                <div class="problem-card">
+                    <div class="problem-number" onclick="viewProblem(${problem.problemNumber})">${problem.problemNumber}</div>
+                    <div class="problem-content" onclick="viewProblem(${problem.problemNumber})">
+                        <div class="problem-header">
+                            <div class="problem-title">Problem ${problem.problemNumber}</div>
+                            <div class="difficulty-badge ${problem.difficulty}">${problem.difficulty}</div>
+                        </div>
+                        <div class="problem-preview">
+                            ${previewContent}
+                        </div>
+                        <div class="problem-meta">
+                            <span>📝 ${problem.solutions?.length || 0} solutions</span>
+                            <span>🖼️ ${problem.images?.length || 0} images</span>
+                            ${problem.topics?.length ? `<span>🏷️ ${problem.topics.length} topics</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="add-to-plan-btn ${inPlan ? 'in-plan' : ''}"
+                            onclick="event.stopPropagation(); toggleStudyPlan(${problem.problemNumber}, this)">
+                        ${inPlan ? '✓ In Study Plan' : '+ Add to Study Plan'}
+                    </button>
+                </div>
+            `;
+            }).join('');
+
+            const listEl = document.getElementById('problemsList');
+            listEl.innerHTML = html || '<div class="loading">No problems found</div>';
+            typesetMath(listEl);
+        }
+
+        function toggleStudyPlan(problemNumber, button) {
+            const testFile = currentTest ? currentTest.filePath.split('/').pop() : 'amc_2012_10a_problems.json';
+            const inPlan = window.studyPlanManager.toggleProblem(problemNumber, testFile);
+            button.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
+            button.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
+            updatePlanCount();
+        }
+
+        function setupFilters() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Update active state
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Filter problems
+                    const filter = btn.dataset.filter;
+                    currentFilter = filter;
+
+                    const filtered = filter === 'all'
+                        ? allProblems
+                        : allProblems.filter(p => p.difficulty === filter);
+
+                    displayProblems(filtered);
+                });
+            });
+        }
+
+        function viewProblem(problemNumber) {
+            const testFile = currentTest ? currentTest.filePath.split('/').pop() : 'amc_2012_10a_problems.json';
+            window.location.href = `problem.html?number=${problemNumber}&test=${testFile}`;
+        }
+
+        // Load data on page load
+        loadData();
+    </script>
+
+    <!-- Study Plan Management -->
+    <script src="studyPlan.js"></script>
+    <script>
+        // Update study plan count on page load
+        function updatePlanCount() {
+            const count = window.studyPlanManager.getProblemCount();
+            document.getElementById('planCount').textContent = count;
+
+            // Update current plan name
+            const plan = window.studyPlanManager.getActivePlan();
+            document.getElementById('currentPlanName').textContent = plan.name;
+
+            // Load plan list in dropdown
+            loadPlanDropdown();
+        }
+
+        function loadPlanDropdown() {
+            const plans = window.studyPlanManager.getPlans();
+            const activePlanId = window.studyPlanManager.getActivePlanId();
+            const dropdown = document.getElementById('planDropdown');
+
+            const planOptions = Object.values(plans).map(plan => {
+                const count = plan.problems.length;
+                const isActive = plan.id === activePlanId;
+                return `
+                    <div class="plan-option ${isActive ? 'active' : ''}" onclick="switchPlan('${plan.id}')">
+                        <span>${plan.name}</span>
+                        <span class="plan-count-badge">${count}</span>
+                    </div>
+                `;
+            }).join('');
+
+            dropdown.innerHTML = `
+                ${planOptions}
+                <div class="plan-divider"></div>
+                <div class="plan-action" onclick="createNewPlan()">➕ New Plan</div>
+            `;
+        }
+
+        function togglePlanDropdown() {
+            const dropdown = document.getElementById('planDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        function switchPlan(planId) {
+            window.studyPlanManager.setActivePlan(planId);
+            togglePlanDropdown();
+            updatePlanCount();
+
+            // Refresh the problem list to show correct "in plan" status
+            if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
+                const filtered = currentFilter === 'all'
+                    ? allProblems
+                    : allProblems.filter(p => p.difficulty === currentFilter);
+                displayProblems(filtered);
+            }
+        }
+
+        function createNewPlan() {
+            const name = prompt('Enter name for new study plan:');
+            if (name) {
+                window.studyPlanManager.createPlan(name);
+                togglePlanDropdown();
+                updatePlanCount();
+
+                // Refresh the problem list to show correct "in plan" status for new plan
+                if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
+                    const filtered = currentFilter === 'all'
+                        ? allProblems
+                        : allProblems.filter(p => p.difficulty === currentFilter);
+                    displayProblems(filtered);
+                }
+            }
+        }
+
+        // Close dropdown when clicking outside
+        window.addEventListener('click', (e) => {
+            if (!e.target.matches('.plan-dropdown-btn') && !e.target.matches('.plan-dropdown-btn *')) {
+                const dropdown = document.getElementById('planDropdown');
+                if (dropdown.classList.contains('show')) {
+                    dropdown.classList.remove('show');
+                }
+            }
+        });
+
+        // Update count when page loads
+        updatePlanCount();
+
+        // Update count after adding/removing problems
+        window.addEventListener('storage', updatePlanCount);
+    </script>
+</body>
+</html>

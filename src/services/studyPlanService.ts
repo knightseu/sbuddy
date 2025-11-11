@@ -92,11 +92,19 @@ export class StudyPlanService {
 
   async createStudyPlan(
     userId: string,
-    data: { name: string; description?: string; targetTestDate?: Date }
+    data: { name: string; description?: string; targetTestDate?: Date; isActive?: boolean }
   ): Promise<StudyPlan> {
+    // If setting as active, deactivate all other plans for this user
+    if (data.isActive) {
+      await db.query(
+        `UPDATE study_plans SET is_active = false WHERE user_id = $1`,
+        [userId]
+      );
+    }
+
     const result = await db.query(`
       INSERT INTO study_plans (user_id, name, description, target_test_date, is_active)
-      VALUES ($1, $2, $3, $4, false)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING
         id,
         user_id as "userId",
@@ -106,7 +114,7 @@ export class StudyPlanService {
         target_test_date as "targetTestDate",
         created_at as "createdAt",
         updated_at as "updatedAt"
-    `, [userId, data.name, data.description || null, data.targetTestDate || null]);
+    `, [userId, data.name, data.description || null, data.targetTestDate || null, data.isActive || false]);
 
     return { ...result.rows[0], problemCount: 0 };
   }

@@ -69,7 +69,7 @@ export class StudyPlanController {
   async createStudyPlan(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as any).user?.userId;
-      const { name, description, targetTestDate } = req.body;
+      const { name, description, targetTestDate, isActive } = req.body;
 
       if (!userId) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -84,7 +84,8 @@ export class StudyPlanController {
       const plan = await studyPlanService.createStudyPlan(userId, {
         name,
         description,
-        targetTestDate: targetTestDate ? new Date(targetTestDate) : undefined
+        targetTestDate: targetTestDate ? new Date(targetTestDate) : undefined,
+        isActive: isActive || false
       });
 
       res.status(201).json({ success: true, data: plan });

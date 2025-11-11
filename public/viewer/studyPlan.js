@@ -1,275 +1,399 @@
 /**
- * Study Plan Management
- * Handles creating, updating, and managing multiple study plans
+ * Study Plan Management - API-backed version
+ * Handles creating, updating, and managing study plans using the database API
  */
 
 class StudyPlanManager {
     constructor() {
-        this.storageKey = 'amc_study_plans';
-        this.activeKey = 'amc_active_plan';
+        this.apiBase = '/api/v1/viewer';
+        this.guestIdKey = 'sbuddy_guest_id';
+        this.oldStorageKey = 'amc_study_plans'; // For migration
+        this.oldActiveKey = 'amc_active_plan'; // For migration
+        this.guestId = null;
+        this.activePlan = null;
+        this.plans = [];
+        this.initialized = false;
+        this.cache = new Map(); // Cache for plans
+    }
+
+    // Initialize the manager and migrate old data if needed
+    async initialize() {
+        if (this.initialized) return;
+
+        // Get or create guest ID
+        this.guestId = localStorage.getItem(this.guestIdKey);
+        if (!this.guestId) {
+            this.guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem(this.guestIdKey, this.guestId);
+        }
+
+        // Check for old localStorage data and migrate
+        await this.migrateOldData();
+
+        // Load plans from API
+        await this.loadPlans();
+
+        this.initialized = true;
+    }
+
+    // Get headers for API calls
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'X-Guest-ID': this.guestId
+        };
+    }
+
+    // Migrate old localStorage data to API
+    async migrateOldData() {
+        const oldPlans = localStorage.getItem(this.oldStorageKey);
+        if (!oldPlans) return;
+
+        try {
+            const plans = JSON.parse(oldPlans);
+            const oldActivePlanId = localStorage.getItem(this.oldActiveKey);
+
+            // Create plans in API
+            for (const [planId, planData] of Object.entries(plans)) {
+                const isActive = planId === oldActivePlanId;
+
+                // Create the plan
+                const response = await fetch(`${this.apiBase}/study-plans`, {
+                    method: 'POST',
+                    headers: this.getHeaders(),
+                    body: JSON.stringify({
+                        name: planData.name || 'Migrated Plan',
+                        description: 'Migrated from localStorage'
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const newPlanId = result.data.id;
+
+                    // Set as active if it was active before
+                    if (isActive) {
+                        await fetch(`${this.apiBase}/study-plans/${newPlanId}`, {
+                            method: 'PUT',
+                            headers: this.getHeaders(),
+                            body: JSON.stringify({ isActive: true })
+                        });
+                    }
+
+                    // Add problems to the plan
+                    if (planData.problems && planData.problems.length > 0) {
+                        for (const problem of planData.problems) {
+                            // Problem might be in old format, only migrate if it has an ID
+                            if (problem.id) {
+                                try {
+                                    await fetch(`${this.apiBase}/study-plans/${newPlanId}/problems/${problem.id}`, {
+                                        method: 'POST',
+                                        headers: this.getHeaders()
+                                    });
+                                } catch (err) {
+                                    console.warn('Failed to migrate problem:', problem, err);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clear old data
+            localStorage.removeItem(this.oldStorageKey);
+            localStorage.removeItem(this.oldActiveKey);
+            console.log('Successfully migrated study plans from localStorage to database');
+        } catch (error) {
+            console.error('Error migrating old data:', error);
+        }
+    }
+
+    // Load all plans from API
+    async loadPlans() {
+        try {
+            const response = await fetch(`${this.apiBase}/study-plans`, {
+                headers: this.getHeaders()
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                this.plans = result.data || [];
+                this.activePlan = this.plans.find(p => p.isActive) || null;
+
+                // If no active plan, create a default one
+                if (!this.activePlan && this.plans.length === 0) {
+                    await this.createPlan('My Study Plan', true);
+                } else if (!this.activePlan && this.plans.length > 0) {
+                    // Set first plan as active
+                    await this.setActivePlan(this.plans[0].id);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading plans:', error);
+            // Fallback to empty state
+            this.plans = [];
+            this.activePlan = null;
+        }
     }
 
     // Get all study plans
-    getPlans() {
-        const plans = localStorage.getItem(this.storageKey);
-        return plans ? JSON.parse(plans) : {};
+    async getPlans() {
+        await this.initialize();
+        return this.plans;
     }
 
     // Get active plan ID
     getActivePlanId() {
-        return localStorage.getItem(this.activeKey) || 'default';
+        return this.activePlan?.id || null;
     }
 
     // Set active plan
-    setActivePlan(planId) {
-        localStorage.setItem(this.activeKey, planId);
-    }
+    async setActivePlan(planId) {
+        await this.initialize();
 
-    // Get active plan
-    getActivePlan() {
-        const plans = this.getPlans();
-        const activePlanId = this.getActivePlanId();
+        try {
+            const response = await fetch(`${this.apiBase}/study-plans/${planId}`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ isActive: true })
+            });
 
-        if (!plans[activePlanId]) {
-            // Create default plan if it doesn't exist
-            plans[activePlanId] = {
-                id: activePlanId,
-                name: 'My Study Plan',
-                problems: [],
-                createdAt: new Date().toISOString()
-            };
-            this.savePlans(plans);
-        }
-
-        return plans[activePlanId];
-    }
-
-    // Save all plans
-    savePlans(plans) {
-        localStorage.setItem(this.storageKey, JSON.stringify(plans));
-    }
-
-    // Create new plan
-    createPlan(name) {
-        const plans = this.getPlans();
-        const planId = 'plan_' + Date.now();
-
-        plans[planId] = {
-            id: planId,
-            name: name || 'New Study Plan',
-            problems: [],
-            createdAt: new Date().toISOString()
-        };
-
-        this.savePlans(plans);
-        this.setActivePlan(planId);
-        return planId;
-    }
-
-    // Delete plan
-    deletePlan(planId) {
-        const plans = this.getPlans();
-        delete plans[planId];
-        this.savePlans(plans);
-
-        // If deleted plan was active, switch to another existing plan
-        if (this.getActivePlanId() === planId) {
-            const remainingPlans = Object.keys(plans);
-            if (remainingPlans.length > 0) {
-                // Switch to the first remaining plan
-                this.setActivePlan(remainingPlans[0]);
-            } else {
-                // No plans left, create a new default plan
-                const newPlanId = this.createPlan('My Study Plan');
-                // createPlan already sets it as active
+            if (response.ok) {
+                await this.loadPlans(); // Reload to update state
+                return true;
             }
-        }
-    }
-
-    // Rename plan
-    renamePlan(planId, newName) {
-        const plans = this.getPlans();
-        if (plans[planId]) {
-            plans[planId].name = newName;
-            this.savePlans(plans);
-        }
-    }
-
-    // Check if problem is in active plan
-    // Supports both old format (just number) and new format ({testFile, problemNumber})
-    isProblemInPlan(problemNumber, testFile = null) {
-        const plan = this.getActivePlan();
-        if (!plan.problems) return false;
-
-        return plan.problems.some(p => {
-            // Old format: just a number
-            if (typeof p === 'number') {
-                return p === problemNumber;
-            }
-            // New format: {testFile, problemNumber}
-            if (typeof p === 'object' && p.problemNumber) {
-                const numberMatch = p.problemNumber === problemNumber;
-                if (!testFile) return numberMatch;
-                return numberMatch && p.testFile === testFile;
-            }
-            return false;
-        });
-    }
-
-    // Add problem to active plan (new format with testFile)
-    addProblem(problemNumber, testFile = 'amc_2012_10a_problems.json') {
-        const plans = this.getPlans();
-        const activePlanId = this.getActivePlanId();
-        const plan = plans[activePlanId];
-
-        // Check if already exists
-        if (this.isProblemInPlan(problemNumber, testFile)) {
-            return false;
-        }
-
-        // Store as object with testFile and problemNumber
-        plan.problems.push({ testFile, problemNumber });
-
-        // Sort by test file then by problem number
-        plan.problems.sort((a, b) => {
-            const aTest = typeof a === 'object' ? a.testFile : '';
-            const bTest = typeof b === 'object' ? b.testFile : '';
-            const aNum = typeof a === 'object' ? a.problemNumber : a;
-            const bNum = typeof b === 'object' ? b.problemNumber : b;
-
-            if (aTest !== bTest) return aTest.localeCompare(bTest);
-            return aNum - bNum;
-        });
-
-        this.savePlans(plans);
-        return true;
-    }
-
-    // Remove problem from active plan
-    removeProblem(problemNumber, testFile = null) {
-        const plans = this.getPlans();
-        const activePlanId = this.getActivePlanId();
-        const plan = plans[activePlanId];
-
-        const index = plan.problems.findIndex(p => {
-            if (typeof p === 'number') {
-                return p === problemNumber;
-            }
-            if (typeof p === 'object' && p.problemNumber) {
-                const numberMatch = p.problemNumber === problemNumber;
-                if (!testFile) return numberMatch;
-                return numberMatch && p.testFile === testFile;
-            }
-            return false;
-        });
-
-        if (index > -1) {
-            plan.problems.splice(index, 1);
-            this.savePlans(plans);
-            return true;
+        } catch (error) {
+            console.error('Error setting active plan:', error);
         }
         return false;
     }
 
-    // Toggle problem in active plan
-    toggleProblem(problemNumber, testFile = 'amc_2012_10a_problems.json') {
-        if (this.isProblemInPlan(problemNumber, testFile)) {
-            this.removeProblem(problemNumber, testFile);
-            return false;
-        } else {
-            this.addProblem(problemNumber, testFile);
-            return true;
+    // Get active plan
+    async getActivePlan() {
+        await this.initialize();
+        return this.activePlan;
+    }
+
+    // Create new plan
+    async createPlan(name, setAsActive = false) {
+        await this.initialize();
+
+        try {
+            const response = await fetch(`${this.apiBase}/study-plans`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    name: name || 'New Study Plan',
+                    isActive: setAsActive
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                await this.loadPlans(); // Reload to update state
+                return result.data.id;
+            }
+        } catch (error) {
+            console.error('Error creating plan:', error);
         }
+        return null;
     }
 
-    // Get problem count for active plan
-    getProblemCount() {
-        const plan = this.getActivePlan();
-        return plan.problems.length;
+    // Delete plan
+    async deletePlan(planId) {
+        await this.initialize();
+
+        try {
+            const response = await fetch(`${this.apiBase}/study-plans/${planId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+
+            if (response.ok) {
+                await this.loadPlans(); // Reload to update state
+                return true;
+            }
+        } catch (error) {
+            console.error('Error deleting plan:', error);
+        }
+        return false;
     }
 
-    // ID-based methods for API integration
+    // Rename plan
+    async renamePlan(planId, newName) {
+        await this.initialize();
+
+        try {
+            const response = await fetch(`${this.apiBase}/study-plans/${planId}`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ name: newName })
+            });
+
+            if (response.ok) {
+                await this.loadPlans(); // Reload to update state
+                return true;
+            }
+        } catch (error) {
+            console.error('Error renaming plan:', error);
+        }
+        return false;
+    }
 
     // Check if problem is in active plan by ID
-    isProblemInPlanById(problemId) {
-        const plan = this.getActivePlan();
-        if (!plan.problems) return false;
+    async isProblemInPlanById(problemId) {
+        await this.initialize();
 
-        return plan.problems.some(p => {
-            // New API format: {id, ...}
-            if (typeof p === 'object' && p.id) {
-                return p.id === problemId;
+        if (!this.activePlan) return false;
+
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problems/${problemId}/check`,
+                { headers: this.getHeaders() }
+            );
+
+            if (response.ok) {
+                const result = await response.json();
+                return result.data.inPlan;
             }
-            return false;
-        });
+        } catch (error) {
+            console.error('Error checking problem in plan:', error);
+        }
+        return false;
     }
 
     // Add problem by ID (with full problem data)
-    addProblemById(problemId, problemData = {}) {
-        const plans = this.getPlans();
-        const activePlanId = this.getActivePlanId();
-        const plan = plans[activePlanId];
+    async addProblemById(problemId, problemData = {}) {
+        await this.initialize();
 
-        // Check if already exists
-        if (this.isProblemInPlanById(problemId)) {
-            return false;
+        if (!this.activePlan) {
+            await this.createPlan('My Study Plan', true);
+            await this.initialize();
         }
 
-        // Store with ID and relevant metadata
-        plan.problems.push({
-            id: problemId,
-            problemNumber: problemData.problemNumber,
-            testName: problemData.testName,
-            difficulty: problemData.difficulty
-        });
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problems/${problemId}`,
+                {
+                    method: 'POST',
+                    headers: this.getHeaders()
+                }
+            );
 
-        // Sort by test name then by problem number
-        plan.problems.sort((a, b) => {
-            if (a.testName && b.testName && a.testName !== b.testName) {
-                return a.testName.localeCompare(b.testName);
+            if (response.ok) {
+                // Update plan count
+                await this.loadPlans();
+                return true;
             }
-            return (a.problemNumber || 0) - (b.problemNumber || 0);
-        });
-
-        this.savePlans(plans);
-        return true;
+        } catch (error) {
+            console.error('Error adding problem to plan:', error);
+        }
+        return false;
     }
 
     // Remove problem by ID
-    removeProblemById(problemId) {
-        const plans = this.getPlans();
-        const activePlanId = this.getActivePlanId();
-        const plan = plans[activePlanId];
+    async removeProblemById(problemId) {
+        await this.initialize();
 
-        const index = plan.problems.findIndex(p => {
-            if (typeof p === 'object' && p.id) {
-                return p.id === problemId;
+        if (!this.activePlan) return false;
+
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problems/${problemId}`,
+                {
+                    method: 'DELETE',
+                    headers: this.getHeaders()
+                }
+            );
+
+            if (response.ok) {
+                // Update plan count
+                await this.loadPlans();
+                return true;
             }
-            return false;
-        });
-
-        if (index > -1) {
-            plan.problems.splice(index, 1);
-            this.savePlans(plans);
-            return true;
+        } catch (error) {
+            console.error('Error removing problem from plan:', error);
         }
         return false;
     }
 
     // Toggle problem by ID
-    toggleProblemById(problemId) {
-        // For now, get the problem from allProblems (if available globally)
-        const problemData = window.allProblems?.find(p => p.id === problemId) || {};
+    async toggleProblemById(problemId) {
+        const inPlan = await this.isProblemInPlanById(problemId);
 
-        if (this.isProblemInPlanById(problemId)) {
-            this.removeProblemById(problemId);
+        if (inPlan) {
+            await this.removeProblemById(problemId);
             return false;
         } else {
-            this.addProblemById(problemId, problemData);
+            const problemData = window.allProblems?.find(p => p.id === problemId) || {};
+            await this.addProblemById(problemId, problemData);
             return true;
         }
+    }
+
+    // Get problem count for active plan
+    async getProblemCount() {
+        await this.initialize();
+        return this.activePlan?.problemCount || 0;
+    }
+
+    // Get all problems in active plan
+    async getProblemsInPlan() {
+        await this.initialize();
+
+        if (!this.activePlan) return [];
+
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problems`,
+                { headers: this.getHeaders() }
+            );
+
+            if (response.ok) {
+                const result = await response.json();
+                return result.data || [];
+            }
+        } catch (error) {
+            console.error('Error getting problems in plan:', error);
+        }
+        return [];
+    }
+
+    // Legacy methods for backward compatibility (deprecated, use ID-based methods)
+
+    isProblemInPlan(problemNumber, testFile = null) {
+        console.warn('isProblemInPlan is deprecated, use isProblemInPlanById');
+        return false;
+    }
+
+    addProblem(problemNumber, testFile = 'amc_2012_10a_problems.json') {
+        console.warn('addProblem is deprecated, use addProblemById');
+        return false;
+    }
+
+    removeProblem(problemNumber, testFile = null) {
+        console.warn('removeProblem is deprecated, use removeProblemById');
+        return false;
+    }
+
+    toggleProblem(problemNumber, testFile = 'amc_2012_10a_problems.json') {
+        console.warn('toggleProblem is deprecated, use toggleProblemById');
+        return false;
+    }
+
+    savePlans(plans) {
+        console.warn('savePlans is deprecated, changes are saved via API');
     }
 }
 
 // Create global instance
 window.studyPlanManager = new StudyPlanManager();
+
+// Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.studyPlanManager.initialize();
+    });
+} else {
+    window.studyPlanManager.initialize();
+}

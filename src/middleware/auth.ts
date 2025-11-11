@@ -98,6 +98,50 @@ export const requireRole = (allowedRoles: string[]): RequestHandler => {
   };
 };
 
+export const optionalAuth: RequestHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const authReq = req as AuthRequest;
+  try {
+    const authHeader = authReq.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token) {
+      // Try to authenticate with token
+      try {
+        const decoded = authService.verifyToken(token);
+        authReq.user = {
+          userId: decoded.userId,
+          email: decoded.email,
+          tenantId: decoded.tenantId,
+          role: decoded.role || 'user',
+        };
+      } catch (error) {
+        // Token invalid, continue as guest
+      }
+    }
+
+    // If no user, use guest ID
+    if (!authReq.user) {
+      const guestId = (authReq.headers['x-guest-id'] as string) || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      authReq.user = {
+        userId: guestId,
+        email: `${guestId}@guest.local`,
+        tenantId: 'guest',
+        role: 'guest',
+      };
+      // Send guest ID back to client
+      res.setHeader('X-Guest-ID', guestId);
+    }
+
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Authentication check failed' });
+  }
+};
+
 export const rateLimiter = (maxRequests: number, windowMs: number): RequestHandler => {
   const requests = new Map<string, { count: number; resetTime: number }>();
 

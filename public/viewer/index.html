@@ -718,12 +718,12 @@
             document.getElementById('metadata').innerHTML = html;
         }
 
-        function displayProblems(problems) {
+        async function displayProblems(problems) {
+            // Temporarily show problems without plan status
             const html = problems.map(problem => {
-                const inPlan = window.studyPlanManager.isProblemInPlanById(problem.id);
                 const previewContent = formatProblemPreview(problem.content);
                 return `
-                <div class="problem-card">
+                <div class="problem-card" data-problem-id="${problem.id}">
                     <div class="problem-number" onclick="viewProblem('${problem.id}')">${problem.problemNumber}</div>
                     <div class="problem-content" onclick="viewProblem('${problem.id}')">
                         <div class="problem-header">
@@ -739,9 +739,8 @@
                             ${problem.tags?.length ? `<span>🏷️ ${problem.tags.length} tags</span>` : ''}
                         </div>
                     </div>
-                    <button class="add-to-plan-btn ${inPlan ? 'in-plan' : ''}"
-                            onclick="event.stopPropagation(); toggleStudyPlan('${problem.id}', this)">
-                        ${inPlan ? '✓ In Study Plan' : '+ Add to Study Plan'}
+                    <button class="add-to-plan-btn" onclick="event.stopPropagation(); toggleStudyPlan('${problem.id}', this)">
+                        Loading...
                     </button>
                 </div>
             `;
@@ -750,13 +749,30 @@
             const listEl = document.getElementById('problemsList');
             listEl.innerHTML = html || '<div class="loading">No problems found</div>';
             typesetMath(listEl);
+
+            // Now update button states asynchronously
+            for (const problem of problems) {
+                const inPlan = await window.studyPlanManager.isProblemInPlanById(problem.id);
+                const card = listEl.querySelector(`[data-problem-id="${problem.id}"]`);
+                if (card) {
+                    const button = card.querySelector('.add-to-plan-btn');
+                    button.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
+                    button.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
+                }
+            }
         }
 
-        function toggleStudyPlan(problemId, button) {
-            const inPlan = window.studyPlanManager.toggleProblemById(problemId);
+        async function toggleStudyPlan(problemId, button) {
+            // Disable button while processing
+            button.disabled = true;
+            button.textContent = 'Processing...';
+
+            const inPlan = await window.studyPlanManager.toggleProblemById(problemId);
             button.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
             button.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
-            updatePlanCount();
+            button.disabled = false;
+
+            await updatePlanCount();
         }
 
         function setupFilters() {
@@ -791,25 +807,25 @@
     <script src="studyPlan.js"></script>
     <script>
         // Update study plan count on page load
-        function updatePlanCount() {
-            const count = window.studyPlanManager.getProblemCount();
+        async function updatePlanCount() {
+            const count = await window.studyPlanManager.getProblemCount();
             document.getElementById('planCount').textContent = count;
 
             // Update current plan name
-            const plan = window.studyPlanManager.getActivePlan();
-            document.getElementById('currentPlanName').textContent = plan.name;
+            const plan = await window.studyPlanManager.getActivePlan();
+            document.getElementById('currentPlanName').textContent = plan?.name || 'My Study Plan';
 
             // Load plan list in dropdown
-            loadPlanDropdown();
+            await loadPlanDropdown();
         }
 
-        function loadPlanDropdown() {
-            const plans = window.studyPlanManager.getPlans();
+        async function loadPlanDropdown() {
+            const plans = await window.studyPlanManager.getPlans();
             const activePlanId = window.studyPlanManager.getActivePlanId();
             const dropdown = document.getElementById('planDropdown');
 
-            const planOptions = Object.values(plans).map(plan => {
-                const count = plan.problems.length;
+            const planOptions = plans.map(plan => {
+                const count = plan.problemCount || 0;
                 const isActive = plan.id === activePlanId;
                 return `
                     <div class="plan-option ${isActive ? 'active' : ''}" onclick="switchPlan('${plan.id}')">
@@ -831,33 +847,33 @@
             dropdown.classList.toggle('show');
         }
 
-        function switchPlan(planId) {
-            window.studyPlanManager.setActivePlan(planId);
+        async function switchPlan(planId) {
+            await window.studyPlanManager.setActivePlan(planId);
             togglePlanDropdown();
-            updatePlanCount();
+            await updatePlanCount();
 
             // Refresh the problem list to show correct "in plan" status
             if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
                 const filtered = currentFilter === 'all'
                     ? allProblems
                     : allProblems.filter(p => p.difficulty === currentFilter);
-                displayProblems(filtered);
+                await displayProblems(filtered);
             }
         }
 
-        function createNewPlan() {
+        async function createNewPlan() {
             const name = prompt('Enter name for new study plan:');
             if (name) {
-                window.studyPlanManager.createPlan(name);
+                await window.studyPlanManager.createPlan(name);
                 togglePlanDropdown();
-                updatePlanCount();
+                await updatePlanCount();
 
                 // Refresh the problem list to show correct "in plan" status for new plan
                 if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
                     const filtered = currentFilter === 'all'
                         ? allProblems
                         : allProblems.filter(p => p.difficulty === currentFilter);
-                    displayProblems(filtered);
+                    await displayProblems(filtered);
                 }
             }
         }
@@ -872,11 +888,10 @@
             }
         });
 
-        // Update count when page loads
-        updatePlanCount();
-
-        // Update count after adding/removing problems
-        window.addEventListener('storage', updatePlanCount);
+        // Update count when page loads (wait for study plan manager to initialize)
+        window.studyPlanManager.initialize().then(() => {
+            updatePlanCount();
+        });
     </script>
 </body>
 </html>

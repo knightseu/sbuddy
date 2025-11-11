@@ -187,6 +187,88 @@ class StudyPlanManager {
         const plan = this.getActivePlan();
         return plan.problems.length;
     }
+
+    // ID-based methods for API integration
+
+    // Check if problem is in active plan by ID
+    isProblemInPlanById(problemId) {
+        const plan = this.getActivePlan();
+        if (!plan.problems) return false;
+
+        return plan.problems.some(p => {
+            // New API format: {id, ...}
+            if (typeof p === 'object' && p.id) {
+                return p.id === problemId;
+            }
+            return false;
+        });
+    }
+
+    // Add problem by ID (with full problem data)
+    addProblemById(problemId, problemData = {}) {
+        const plans = this.getPlans();
+        const activePlanId = this.getActivePlanId();
+        const plan = plans[activePlanId];
+
+        // Check if already exists
+        if (this.isProblemInPlanById(problemId)) {
+            return false;
+        }
+
+        // Store with ID and relevant metadata
+        plan.problems.push({
+            id: problemId,
+            problemNumber: problemData.problemNumber,
+            testName: problemData.testName,
+            difficulty: problemData.difficulty
+        });
+
+        // Sort by test name then by problem number
+        plan.problems.sort((a, b) => {
+            if (a.testName && b.testName && a.testName !== b.testName) {
+                return a.testName.localeCompare(b.testName);
+            }
+            return (a.problemNumber || 0) - (b.problemNumber || 0);
+        });
+
+        this.savePlans(plans);
+        return true;
+    }
+
+    // Remove problem by ID
+    removeProblemById(problemId) {
+        const plans = this.getPlans();
+        const activePlanId = this.getActivePlanId();
+        const plan = plans[activePlanId];
+
+        const index = plan.problems.findIndex(p => {
+            if (typeof p === 'object' && p.id) {
+                return p.id === problemId;
+            }
+            return false;
+        });
+
+        if (index > -1) {
+            plan.problems.splice(index, 1);
+            this.savePlans(plans);
+            return true;
+        }
+        return false;
+    }
+
+    // Toggle problem by ID
+    toggleProblemById(problemId) {
+        // For now, get the problem from allProblems (if available globally)
+        const problemData = window.allProblems?.find(p => p.id === problemId) || {};
+
+        if (this.isProblemInPlanById(problemId)) {
+            this.removeProblemById(problemId);
+            return false;
+        } else {
+            this.addProblemById(problemId, problemData);
+            return true;
+        }
+    }
 }
 
 // Create global instance

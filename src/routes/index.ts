@@ -3,6 +3,7 @@ import authController from '../controllers/authController';
 import ocrController from '../controllers/ocrController';
 import problemController from '../controllers/problemController';
 import studySetController from '../controllers/studySetController';
+import testViewerRoutes from './testViewer';
 import { authenticateToken, requireSubscription, rateLimiter } from '../middleware/auth';
 
 const router = Router();
@@ -236,5 +237,8 @@ router.post('/webhooks/stripe', async (req, res) => {
     res.status(400).json({ error: 'Webhook handler failed' });
   }
 });
+
+// Test Viewer routes (generic for all test types: AMC, SAT, etc.)
+router.use('/viewer', testViewerRoutes);
 
 export default router;

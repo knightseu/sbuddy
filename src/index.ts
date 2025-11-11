@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import path from 'path';
 import config from './config/env'; // Validates environment on import
 import passport from './config/passport';
 import session from 'express-session';
@@ -13,15 +14,21 @@ import authRoutes from './routes/auth';
 const app = express();
 const PORT = config.PORT;
 
-// Security middleware
-app.use(helmet());
+// Security middleware - relax for development
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for development to allow inline scripts
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
-  origin: config.FRONTEND_URL,
+  origin: '*', // Allow all origins in development
   credentials: true
 }));
 
 // Request logging
 app.use(morgan('combined'));
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Body parsing middleware
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' })); // Raw body for Stripe webhooks

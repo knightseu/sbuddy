@@ -22,7 +22,9 @@
     "crawl:all-amc10": "ts-node scripts/crawlAllAMC10.ts",
     "crawl:missing-amc10": "ts-node scripts/crawlMissingAMC10.ts",
     "view:crawled": "ts-node scripts/viewCrawledData.ts",
-    "serve:viewer": "ts-node scripts/serveViewer.ts"
+    "serve:viewer": "ts-node scripts/serveViewer.ts",
+    "import:tests": "ts-node src/scripts/importTestData.ts",
+    "import:tests:data": "ts-node src/scripts/importTestData.ts crawled_data"
   },
   "dependencies": {
     "@types/form-data": "^2.2.1",

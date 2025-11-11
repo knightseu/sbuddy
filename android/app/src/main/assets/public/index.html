@@ -190,6 +190,8 @@
 
         .problem-content {
             flex: 1;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .problem-header {
@@ -222,6 +224,11 @@
             font-size: 0.95rem;
             line-height: 1.6;
             margin-bottom: 10px;
+            max-width: 600px;
+        }
+
+        .problem-preview img {
+            max-width: 400px !important;
         }
 
         .problem-meta {
@@ -420,6 +427,9 @@
             transition: all 0.3s;
             margin-top: 10px;
             min-height: 44px;
+            flex-shrink: 0;
+            align-self: flex-start;
+            white-space: nowrap;
         }
 
         .add-to-plan-btn:hover {
@@ -432,6 +442,44 @@
 
         .add-to-plan-btn.in-plan:hover {
             background: #5a6268;
+        }
+
+        @media print {
+            /* Image sizing for A4 paper */
+            img {
+                max-width: 100px !important;
+                max-height: 180px !important;
+                width: auto !important;
+                height: auto !important;
+                object-fit: contain !important;
+                page-break-inside: avoid;
+                display: block;
+                margin: 10px auto;
+            }
+
+            /* Hide UI elements when printing */
+            .add-to-plan-btn,
+            .filter-section,
+            .search-section,
+            button {
+                display: none !important;
+            }
+
+            .problem-card {
+                page-break-inside: avoid;
+                border: 1px solid #ccc;
+                margin-bottom: 15px;
+            }
+
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                max-width: 100%;
+                box-shadow: none;
+            }
         }
     </style>
     <script>
@@ -513,7 +561,7 @@
             const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
             return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
                 return `<div style="margin: 12px 0; text-align: center;">
-                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: 100%; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
+                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: auto; max-height: 300px; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
                 </div>`;
             });
         }

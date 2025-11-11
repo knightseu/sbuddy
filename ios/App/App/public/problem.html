@@ -373,6 +373,85 @@
                 gap: 15px;
             }
         }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                max-width: 100%;
+                border-radius: 0;
+            }
+
+            .header {
+                background: white;
+                color: #333;
+                border-bottom: 2px solid #333;
+                padding: 10px;
+                page-break-after: avoid;
+            }
+
+            .back-btn,
+            .study-plan-btn,
+            .add-to-plan-btn,
+            .study-plan-header-btn,
+            .toggle-btn {
+                display: none !important;
+            }
+
+            .navigation {
+                display: none !important;
+            }
+
+            /* Image sizing for A4 paper */
+            img {
+                max-width: 50% !important;
+                max-height: 250px !important;
+                height: auto !important;
+                object-fit: contain !important;
+                page-break-inside: avoid;
+                display: block;
+                margin: 10px auto;
+            }
+
+            /* Specific sizing for answer choices images */
+            .problem-statement img,
+            div[style*="margin-top: 15px"] img {
+                max-width: 42.5% !important;
+                max-height: 200px !important;
+            }
+
+            /* Diagram images in solutions */
+            .solution-content img {
+                max-width: 35% !important;
+                max-height: 175px !important;
+            }
+
+            .problem-card,
+            .solution-card,
+            .section {
+                page-break-inside: avoid;
+                border: 1px solid #ccc;
+                margin-bottom: 15px;
+            }
+
+            .solution-content {
+                display: block !important;
+                height: auto !important;
+            }
+
+            .content {
+                padding: 15px;
+            }
+
+            /* Ensure text wraps properly around smaller images */
+            .problem-statement {
+                overflow: visible;
+            }
+        }
     </style>
 </head>
 <body>
@@ -385,7 +464,7 @@
                 </button>
             </div>
             <div class="header-left">
-                <a href="index.html" class="back-btn">← Back to List</a>
+                <a href="index.html" class="back-btn" id="backBtn">← Back to List</a>
                 <h1 id="problemTitle">Loading...</h1>
             </div>
             <div id="difficultyBadge"></div>
@@ -404,18 +483,68 @@
     <script>
         let currentProblem = null;
         let allProblems = [];
+        let currentTestId = null;
 
         async function loadProblem() {
             const urlParams = new URLSearchParams(window.location.search);
+            const problemId = urlParams.get('id');
             const problemNumber = parseInt(urlParams.get('number'));
-            const testFile = urlParams.get('test') || 'amc_2012_10a_problems.json'; // Default to 2012 10A
+            const testFile = urlParams.get('test');
 
-            if (!problemNumber) {
+            try {
+                // New API-based format: ?id=...
+                if (problemId) {
+                    await loadProblemById(problemId);
+                }
+                // Old file-based format: ?number=...&test=...
+                else if (problemNumber && testFile) {
+                    await loadProblemFromFile(problemNumber, testFile);
+                }
+                else {
+                    document.getElementById('content').innerHTML =
+                        '<div class="error">No problem specified. Please use ?id=... or ?number=...&test=...</div>';
+                }
+            } catch (error) {
                 document.getElementById('content').innerHTML =
-                    '<div class="error">No problem number specified</div>';
-                return;
+                    '<div class="error">Error loading problem: ' + error.message + '</div>';
             }
+        }
 
+        async function loadProblemById(problemId) {
+            try {
+                // Fetch problem from API
+                const response = await fetch(`/api/v1/viewer/problems/${problemId}`);
+                if (!response.ok) {
+                    throw new Error('Problem not found');
+                }
+                const result = await response.json();
+                currentProblem = result.data;
+                currentTestId = currentProblem.testId;
+
+                // Load all problems from the same test for navigation
+                const testResponse = await fetch(`/api/v1/viewer/tests/${currentTestId}/problems`);
+                if (testResponse.ok) {
+                    const testResult = await testResponse.json();
+                    allProblems = testResult.data || [];
+                }
+
+                // Update page title
+                document.getElementById('problemTitle').textContent =
+                    `${currentProblem.testName || 'Problem'} - Problem ${currentProblem.problemNumber}`;
+
+                // Update back button to remember the test
+                if (currentTestId) {
+                    document.getElementById('backBtn').href = `index.html?testId=${currentTestId}`;
+                }
+
+                displayProblem(currentProblem);
+                setupNavigationById(problemId);
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        async function loadProblemFromFile(problemNumber, testFile) {
             try {
                 const response = await fetch(`data/${testFile}`);
                 const data = await response.json();
@@ -434,8 +563,7 @@
                 displayProblem(currentProblem);
                 setupNavigation(problemNumber, testFile);
             } catch (error) {
-                document.getElementById('content').innerHTML =
-                    '<div class="error">Error loading problem: ' + error.message + '</div>';
+                throw error;
             }
         }
 
@@ -458,8 +586,12 @@
 
         function formatChoice(choice) {
             if (!choice) return choice;
+            // Handle both string (old format) and object (new API format)
+            const choiceText = typeof choice === 'string' ? choice : (choice.choiceText || '');
+            if (!choiceText) return '';
+
             // First apply standard formatting
-            let formatted = formatSolutionWithDiagrams(choice);
+            let formatted = formatSolutionWithDiagrams(choiceText);
             // If contains LaTeX commands but not wrapped in $...$ or $$...$$, wrap it
             if (/\\[a-zA-Z]+/.test(formatted) && !formatted.includes('$')) {
                 formatted = `$${formatted}$`;
@@ -483,26 +615,31 @@
                 <div class="section">
                     <h2>Solutions (${problem.solutions.length} available)</h2>
                     <div class="solutions">
-                        ${problem.solutions.map((solution, idx) => `
+                        ${problem.solutions.map((solution, idx) => {
+                            // Handle both string (old format) and object (new API format)
+                            const solutionText = typeof solution === 'string' ? solution : (solution.solutionText || '');
+                            return `
                             <div class="solution-card">
                                 <div class="solution-header" onclick="toggleSolution(${idx})">
                                     <div class="solution-title">Solution ${idx + 1}</div>
                                     <button class="toggle-btn" id="toggleBtn${idx}">Show</button>
                                 </div>
                                 <div class="solution-content" id="solution${idx}">
-                                    ${formatSolutionWithDiagrams(solution)}
+                                    ${formatSolutionWithDiagrams(solutionText)}
                                 </div>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             ` : '<div class="section"><h2>Solutions</h2><p>No solutions available</p></div>';
 
-            const topicsHtml = problem.topics && problem.topics.length > 0 ? `
+            // Handle both old format (topics array) and new API format (tags array)
+            const topics = problem.topics || (problem.tags ? problem.tags.map(t => t.name) : []);
+            const topicsHtml = topics && topics.length > 0 ? `
                 <div class="section">
                     <h2>Topics</h2>
                     <div class="topics">
-                        ${problem.topics.map(topic => `<span class="tag">${topic}</span>`).join('')}
+                        ${topics.map(topic => `<span class="tag">${topic}</span>`).join('')}
                     </div>
                 </div>
             ` : '';
@@ -523,15 +660,20 @@
                 </div>
             ` : '';
 
+            // Extract year and test from testName if not in old format
+            const yearMatch = problem.testName ? problem.testName.match(/(\d{4})/) : null;
+            const year = problem.year || (yearMatch ? yearMatch[1] : '');
+            const testName = problem.test || problem.testName || '';
+
             const html = `
                 <div class="problem-info">
                     <div class="info-item">
                         <label>Year</label>
-                        <div class="value">${problem.year}</div>
+                        <div class="value">${year}</div>
                     </div>
                     <div class="info-item">
                         <label>Test</label>
-                        <div class="value">AMC 10${problem.test}</div>
+                        <div class="value">${testName}</div>
                     </div>
                     <div class="info-item">
                         <label>Problem Number</label>
@@ -539,14 +681,14 @@
                     </div>
                     <div class="info-item">
                         <label>Difficulty</label>
-                        <div class="value">${problem.difficulty}</div>
+                        <div class="value">${problem.difficulty || 'N/A'}</div>
                     </div>
                 </div>
 
                 <div class="section">
                     <h2>Problem Statement</h2>
                     <div class="problem-statement">
-                        ${formatSolutionWithDiagrams(problem.content)}
+                        ${formatSolutionWithDiagrams(problem.content || '')}
                     </div>
                     ${choicesHtml}
                     ${imagesHtml}
@@ -601,6 +743,18 @@
             }
         }
 
+        function setupNavigationById(currentProblemId) {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const nav = document.getElementById('navigation');
+
+            nav.style.display = 'flex';
+
+            const currentIndex = allProblems.findIndex(p => p.id === currentProblemId);
+            prevBtn.disabled = currentIndex === 0;
+            nextBtn.disabled = currentIndex === allProblems.length - 1;
+        }
+
         function setupNavigation(currentNumber, testFile) {
             const prevBtn = document.getElementById('prevBtn');
             const nextBtn = document.getElementById('nextBtn');
@@ -615,13 +769,27 @@
 
         function navigate(direction) {
             const urlParams = new URLSearchParams(window.location.search);
-            const currentNumber = parseInt(urlParams.get('number'));
-            const testFile = urlParams.get('test') || 'amc_2012_10a_problems.json';
-            const newNumber = currentNumber + direction;
+            const problemId = urlParams.get('id');
 
-            const maxProblem = allProblems.length;
-            if (newNumber >= 1 && newNumber <= maxProblem) {
-                window.location.href = `problem.html?number=${newNumber}&test=${testFile}`;
+            // New API-based navigation
+            if (problemId) {
+                const currentIndex = allProblems.findIndex(p => p.id === problemId);
+                const newIndex = currentIndex + direction;
+
+                if (newIndex >= 0 && newIndex < allProblems.length) {
+                    window.location.href = `problem.html?id=${allProblems[newIndex].id}`;
+                }
+            }
+            // Old file-based navigation
+            else {
+                const currentNumber = parseInt(urlParams.get('number'));
+                const testFile = urlParams.get('test') || 'amc_2012_10a_problems.json';
+                const newNumber = currentNumber + direction;
+
+                const maxProblem = allProblems.length;
+                if (newNumber >= 1 && newNumber <= maxProblem) {
+                    window.location.href = `problem.html?number=${newNumber}&test=${testFile}`;
+                }
             }
         }
 
@@ -632,25 +800,43 @@
     <!-- Study Plan Management -->
     <script src="studyPlan.js"></script>
     <script>
-        function updateStudyPlanButton() {
+        async function updateStudyPlanButton() {
             const urlParams = new URLSearchParams(window.location.search);
+            const problemId = urlParams.get('id');
             const problemNumber = parseInt(urlParams.get('number'));
-            const testFile = urlParams.get('test') || 'amc_2012_10a_problems.json';
+            const testFile = urlParams.get('test');
 
-            if (problemNumber) {
-                const inPlan = window.studyPlanManager.isProblemInPlan(problemNumber, testFile);
-                const btn = document.getElementById('addToPlanBtn');
-                btn.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
-                btn.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
+            const btn = document.getElementById('addToPlanBtn');
+            if (!btn) return;
+
+            let inPlan = false;
+
+            // Use API-based method if we have a problem ID
+            if (problemId) {
+                inPlan = await window.studyPlanManager.isProblemInPlanById(problemId);
             }
+            // Fall back to old file-based method
+            else if (problemNumber && testFile) {
+                inPlan = window.studyPlanManager.isProblemInPlan(problemNumber, testFile);
+            }
+
+            btn.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
+            btn.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
         }
 
-        function toggleStudyPlan() {
+        async function toggleStudyPlan() {
             const urlParams = new URLSearchParams(window.location.search);
+            const problemId = urlParams.get('id');
             const problemNumber = parseInt(urlParams.get('number'));
-            const testFile = urlParams.get('test') || 'amc_2012_10a_problems.json';
+            const testFile = urlParams.get('test');
 
-            if (problemNumber) {
+            // Use API-based method if we have a problem ID
+            if (problemId) {
+                await window.studyPlanManager.toggleProblemById(problemId);
+                await updateStudyPlanButton();
+            }
+            // Fall back to old file-based method
+            else if (problemNumber && testFile) {
                 window.studyPlanManager.toggleProblem(problemNumber, testFile);
                 updateStudyPlanButton();
             }

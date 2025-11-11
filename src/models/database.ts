@@ -250,7 +250,7 @@ const createTables = async () => {
 
     `CREATE TABLE IF NOT EXISTS study_plans (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
       name VARCHAR(255) NOT NULL DEFAULT 'My Study Plan',
       description TEXT,
       is_active BOOLEAN DEFAULT FALSE,

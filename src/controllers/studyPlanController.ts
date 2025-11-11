@@ -7,7 +7,7 @@ export class StudyPlanController {
   // ============ Study Plans ============
   async getUserStudyPlans(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -23,7 +23,7 @@ export class StudyPlanController {
 
   async getStudyPlanById(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId } = req.params;
 
       if (!userId) {
@@ -46,7 +46,7 @@ export class StudyPlanController {
 
   async getActiveStudyPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -68,7 +68,7 @@ export class StudyPlanController {
 
   async createStudyPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { name, description, targetTestDate } = req.body;
 
       if (!userId) {
@@ -95,7 +95,7 @@ export class StudyPlanController {
 
   async updateStudyPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId } = req.params;
       const { name, description, isActive, targetTestDate } = req.body;
 
@@ -125,7 +125,7 @@ export class StudyPlanController {
 
   async deleteStudyPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId } = req.params;
 
       if (!userId) {
@@ -149,7 +149,7 @@ export class StudyPlanController {
   // ============ Study Plan Problems ============
   async getProblemsInPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId } = req.params;
       const { completed, tags } = req.query;
 
@@ -171,7 +171,7 @@ export class StudyPlanController {
 
   async addProblemToPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId, problemId } = req.params;
 
       if (!userId) {
@@ -192,7 +192,7 @@ export class StudyPlanController {
 
   async removeProblemFromPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId, problemId } = req.params;
 
       if (!userId) {
@@ -219,7 +219,7 @@ export class StudyPlanController {
 
   async updateProblemInPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId, problemId } = req.params;
       const { completed, notes } = req.body;
 
@@ -251,7 +251,7 @@ export class StudyPlanController {
 
   async checkProblemInPlan(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId, problemId } = req.params;
 
       if (!userId) {
@@ -268,7 +268,7 @@ export class StudyPlanController {
 
   async getStudyPlanStats(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       const { planId } = req.params;
 
       if (!userId) {

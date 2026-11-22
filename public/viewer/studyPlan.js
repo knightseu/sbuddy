@@ -17,9 +17,15 @@ class StudyPlanManager {
     }
 
     // Initialize the manager and migrate old data if needed
-    async initialize() {
-        if (this.initialized) return;
+    // Concurrent callers share one in-flight initialization promise.
+    initialize() {
+        if (!this.initPromise) {
+            this.initPromise = this.doInitialize();
+        }
+        return this.initPromise;
+    }
 
+    async doInitialize() {
         // Get or create guest ID
         this.guestId = localStorage.getItem(this.guestIdKey);
         if (!this.guestId) {
@@ -109,24 +115,20 @@ class StudyPlanManager {
     }
 
     // Load all plans from API
+    // Must not call initialize() (directly or via public methods): it runs
+    // during initialization, and re-entering initialize() loops forever.
     async loadPlans() {
         try {
-            const response = await fetch(`${this.apiBase}/study-plans`, {
-                headers: this.getHeaders()
-            });
+            await this.fetchPlans();
 
-            if (response.ok) {
-                const result = await response.json();
-                this.plans = result.data || [];
-                this.activePlan = this.plans.find(p => p.isActive) || null;
-
-                // If no active plan, create a default one
-                if (!this.activePlan && this.plans.length === 0) {
-                    await this.createPlan('My Study Plan', true);
-                } else if (!this.activePlan && this.plans.length > 0) {
-                    // Set first plan as active
-                    await this.setActivePlan(this.plans[0].id);
+            // Ensure there is an active plan, then refresh once
+            if (!this.activePlan) {
+                if (this.plans.length === 0) {
+                    await this.requestCreatePlan('My Study Plan', true);
+                } else {
+                    await this.requestSetActivePlan(this.plans[0].id);
                 }
+                await this.fetchPlans();
             }
         } catch (error) {
             console.error('Error loading plans:', error);
@@ -134,6 +136,40 @@ class StudyPlanManager {
             this.plans = [];
             this.activePlan = null;
         }
+    }
+
+    async fetchPlans() {
+        const response = await fetch(`${this.apiBase}/study-plans`, {
+            headers: this.getHeaders()
+        });
+        if (!response.ok) throw new Error(`Failed to load plans: ${response.status}`);
+        const result = await response.json();
+        this.plans = result.data || [];
+        this.activePlan = this.plans.find(p => p.isActive) || null;
+    }
+
+    // Returns the new plan's id, or null on failure
+    async requestCreatePlan(name, setAsActive) {
+        const response = await fetch(`${this.apiBase}/study-plans`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+                name: name || 'New Study Plan',
+                isActive: setAsActive
+            })
+        });
+        if (!response.ok) return null;
+        const result = await response.json();
+        return result.data.id;
+    }
+
+    async requestSetActivePlan(planId) {
+        const response = await fetch(`${this.apiBase}/study-plans/${planId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ isActive: true })
+        });
+        return response.ok;
     }
 
     // Get all study plans
@@ -152,13 +188,7 @@ class StudyPlanManager {
         await this.initialize();
 
         try {
-            const response = await fetch(`${this.apiBase}/study-plans/${planId}`, {
-                method: 'PUT',
-                headers: this.getHeaders(),
-                body: JSON.stringify({ isActive: true })
-            });
-
-            if (response.ok) {
+            if (await this.requestSetActivePlan(planId)) {
                 await this.loadPlans(); // Reload to update state
                 return true;
             }
@@ -179,19 +209,10 @@ class StudyPlanManager {
         await this.initialize();
 
         try {
-            const response = await fetch(`${this.apiBase}/study-plans`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-                body: JSON.stringify({
-                    name: name || 'New Study Plan',
-                    isActive: setAsActive
-                })
-            });
-
-            if (response.ok) {
-                const result = await response.json();
+            const id = await this.requestCreatePlan(name, setAsActive);
+            if (id) {
                 await this.loadPlans(); // Reload to update state
-                return result.data.id;
+                return id;
             }
         } catch (error) {
             console.error('Error creating plan:', error);

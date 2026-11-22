@@ -128,3 +128,17 @@ OCR_SERVICE_URL=...
 - Rate limiting prevents abuse of expensive operations (OCR, AI)
 - Multi-tenant data isolation enforced at query level
 - Comprehensive error handling with appropriate HTTP status codes
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on the fork `knightseu/sbuddy` (not upstream). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

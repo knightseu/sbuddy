@@ -161,6 +161,26 @@ scripts/sbuddy.sh seed               # import crawled_data/ (only into an empty 
 - `npm run dev` and the stack both use port 3000. Stop the stack (`scripts/sbuddy.sh stop`) before running the dev server.
 - The importer is not idempotent (re-running duplicates solutions), so `seed` only runs on an empty database.
 
+### Database Backups
+
+Users, study plans (including guest plans), progress, SRS cards and scores exist only in the Postgres volume. Problem data can be rebuilt from `crawled_data/`; the rest cannot, so back it up.
+
+```bash
+scripts/sbuddy.sh backup              # pg_dump now
+scripts/sbuddy.sh backups             # list backups, last-backup age, schedule
+scripts/sbuddy.sh verify [file]       # restore into a scratch DB and compare row counts with live (default: newest)
+scripts/sbuddy.sh restore <file>      # replace the live DB (asks for confirmation; takes a pre-restore backup first)
+scripts/sbuddy.sh schedule-backups    # daily launchd job at BACKUP_TIME (default 03:00); unschedule-backups removes it
+```
+
+- **Format and location**: `pg_dump -Fc` files in `BACKUP_DIR` (default `~/sbuddy-backups`, mode 700), outside the Docker volume, so `docker compose down -v` does not take them with it. Names carry kind, time and git revision: `sbuddy-daily-20261122-030000-3ecb72a.dump`.
+- **Off-machine copy**: set `BACKUP_COPY_DIR` (e.g. a Dropbox folder) and every backup is copied there too. Dumps include password hashes and emails, so pick a private location. macOS may let the scheduled job write to a cloud-synced folder but not list it. The log then warns that the copy folder is not pruned; prune it by hand, or give `/bin/bash` Full Disk Access.
+- **Retention**: `daily` keeps the 7 newest plus one per week for the 4 weeks before that. `pre-deploy` and `pre-restore` keep the 5 newest. `manual` backups are never pruned.
+- **Before upgrades**: `deploy` takes a `pre-deploy` backup before the new API starts, and aborts if the backup fails.
+- **Monitoring**: a failed scheduled run raises a macOS notification and is logged to `BACKUP_DIR/backup.log`. `status` and `backups` warn when the newest backup is older than 26 hours. The job only runs while the Mac is awake with Docker running; a run missed during sleep fires on wake.
+- **Schema**: a dump contains its own schema. After a restore the API starts and creates any tables the dump predates (`CREATE TABLE IF NOT EXISTS`). If `npm run migrate` has been applied since the dump was taken, re-run it after restoring.
+- **Restore drill**: run `scripts/sbuddy.sh verify` now and then. It proves the newest dump restores, without touching live data.
+
 ## AMC 10 Problem Scraping
 
 Sbuddy includes a powerful web scraper for AMC 10 problems from Art of Problem Solving:

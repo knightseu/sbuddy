@@ -36,7 +36,8 @@ export const initializeDatabase = async () => {
       console.warn('⚠️  Redis connection failed (optional for development)');
     }
 
-    await db.connect();
+    // Check the connection, and release the client so db.end() can finish (#22)
+    await db.query('SELECT 1');
     console.log('✅ Connected to PostgreSQL');
 
     await createTables();
@@ -193,6 +194,7 @@ const createTables = async () => {
     `CREATE TABLE IF NOT EXISTS test_problems (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       test_id UUID REFERENCES tests(id) ON DELETE CASCADE,
+      round TEXT,
       problem_number INTEGER NOT NULL,
       title VARCHAR(500),
       content TEXT NOT NULL,
@@ -203,12 +205,28 @@ const createTables = async () => {
       images TEXT[],
       answer_choices_image TEXT,
       correct_answer TEXT,
+      answer_unit TEXT,
+      answer_alternatives TEXT[],
       explanation TEXT,
       search_vector tsvector,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(test_id, problem_number)
+      CONSTRAINT test_problems_test_round_number_key UNIQUE NULLS NOT DISTINCT (test_id, round, problem_number)
     );`,
+
+    // Migrate databases created before Rounds (#11). Problem identity becomes
+    // (Test, Round, number); round is NULL for single-Round Tests such as AMC 10.
+    // Additive only: existing rows and their ids are untouched.
+    `ALTER TABLE test_problems ADD COLUMN IF NOT EXISTS round TEXT;`,
+    `ALTER TABLE test_problems ADD COLUMN IF NOT EXISTS answer_unit TEXT;`,
+    `ALTER TABLE test_problems ADD COLUMN IF NOT EXISTS answer_alternatives TEXT[];`,
+    `DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'test_problems_test_round_number_key') THEN
+        ALTER TABLE test_problems ADD CONSTRAINT test_problems_test_round_number_key
+          UNIQUE NULLS NOT DISTINCT (test_id, round, problem_number);
+      END IF;
+    END $$;`,
+    `ALTER TABLE test_problems DROP CONSTRAINT IF EXISTS test_problems_test_id_problem_number_key;`,
 
     `CREATE TABLE IF NOT EXISTS problem_tags (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

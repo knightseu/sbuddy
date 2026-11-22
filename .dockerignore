@@ -41,6 +41,9 @@ coverage
 .gitlab-ci.yml
 .travis.yml
 
+# MATHCOUNTS source PDFs and extraction scratch: not needed at runtime
+crawled_data/mathcounts/_*
+
 # Uploads (will be volume mounted)
 uploads/*
 

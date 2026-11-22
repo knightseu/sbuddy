@@ -26,7 +26,8 @@
     "view:crawled": "ts-node scripts/viewCrawledData.ts",
     "serve:viewer": "ts-node scripts/serveViewer.ts",
     "import:tests": "ts-node src/scripts/importTestData.ts",
-    "import:tests:data": "ts-node src/scripts/importTestData.ts crawled_data"
+    "import:tests:data": "ts-node src/scripts/importTestData.ts crawled_data",
+    "import:mathcounts": "ts-node src/scripts/importTestData.ts crawled_data --only=mathcounts"
   },
   "dependencies": {
     "@types/form-data": "^2.2.1",

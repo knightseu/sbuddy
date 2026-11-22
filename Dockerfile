@@ -1,7 +1,7 @@
 # Multi-stage build for optimal image size
 
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,12 @@ COPY src ./src
 RUN npm run build
 
 # Stage 2: Production
-FROM node:18-alpine
+FROM node:22-alpine
+
+# Deployed git revision (shown by `scripts/sbuddy.sh status`)
+ARG GIT_SHA=unknown
+LABEL app=sbuddy-api \
+      org.opencontainers.image.revision=$GIT_SHA
 
 WORKDIR /app
 
@@ -33,7 +38,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy package files and install production dependencies only
 COPY package*.json ./
-RUN npm ci --only=production && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # Copy built application from builder stage
@@ -42,6 +47,13 @@ COPY --from=builder /app/dist ./dist
 # Copy migrations and scripts
 COPY migrations ./migrations
 COPY scripts ./scripts
+
+# Static viewer pages (served by express.static from dist/../public)
+COPY public ./public
+
+# Crawled test data, used to seed an empty database:
+#   node dist/scripts/importTestData.js crawled_data
+COPY crawled_data ./crawled_data
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && \

@@ -6,7 +6,8 @@ dotenv.config();
 
 export const db = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  // Opt-in: the bundled docker-compose Postgres does not serve TLS; set DATABASE_SSL=true for a managed DB
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 export const redis = createClient({

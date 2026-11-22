@@ -6,6 +6,7 @@ coverage/
 # Environment configuration
 .env
 .env.*
+!.env.example
 
 # Logs and diagnostics
 npm-debug.log*

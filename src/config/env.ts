@@ -15,6 +15,7 @@ interface EnvironmentConfig {
 
   // Session
   SESSION_SECRET: string;
+  SESSION_COOKIE_SECURE: boolean;
 
   // Stripe
   STRIPE_SECRET_KEY: string;
@@ -158,6 +159,7 @@ function validateEnvironment(): EnvironmentConfig {
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '15m',
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     SESSION_SECRET: process.env.SESSION_SECRET!,
+    SESSION_COOKIE_SECURE: process.env.SESSION_COOKIE_SECURE === 'true',
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY!,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET!,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,

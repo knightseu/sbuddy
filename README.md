@@ -127,16 +127,39 @@ The application automatically creates database tables on startup. Ensure Postgre
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env` and fill it in. It documents every variable; the server refuses to start if a required one is missing, so placeholder values are provided for external services (Stripe, OpenAI, OAuth, SMTP) that the test viewer doesn't use.
 
-```env
-DATABASE_URL=postgresql://username:password@localhost:5432/sbuddy_db
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-super-secret-jwt-key
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-OPENAI_API_KEY=your-openai-api-key
-OCR_SERVICE_URL=http://localhost:8000
+## Running as a Long-Lived Service (LAN)
+
+The full stack (Postgres, Redis, API) runs in Docker with `restart: unless-stopped`, reachable from other devices on your network. Everything is driven by `scripts/sbuddy.sh`:
+
+```bash
+scripts/sbuddy.sh deploy             # pull (fast-forward), build, restart, health-check; auto-rollback on failure
+scripts/sbuddy.sh deploy --no-pull   # deploy the working tree as-is
+scripts/sbuddy.sh status             # containers, health, deployed git revision, URLs
+scripts/sbuddy.sh logs [service]     # follow logs (default: api; also postgres, redis)
+scripts/sbuddy.sh stop | start | restart
+scripts/sbuddy.sh rollback           # return the API to the previously deployed image
+scripts/sbuddy.sh seed               # import crawled_data/ (only into an empty database)
 ```
+
+`npm run deploy` is a shortcut for `scripts/sbuddy.sh deploy`.
+
+**First-time setup**
+
+1. `cp .env.example .env` and set passwords and secrets (`openssl rand -hex 32`).
+2. `scripts/sbuddy.sh deploy --no-pull`. On an empty database this also imports the AMC tests.
+3. Open `http://<this-machine-ip>:3000/viewer/index.html` from any device on the network (`status` prints the exact URL).
+
+**Updating later**: commit or merge changes, then run `scripts/sbuddy.sh deploy`. It refuses to run with uncommitted changes, pulls with `--ff-only`, keeps the previous image as `sbuddy-api:previous`, and rolls back automatically if the new API fails its health check.
+
+**Notes**
+
+- Configuration comes only from `.env`. The script runs compose in a clean environment, so variables exported in your shell (e.g. `POSTGRES_USER`) are ignored.
+- Only the API port is exposed to the network. Postgres and Redis listen on `127.0.0.1`. This is meant for a trusted LAN over plain HTTP: don't port-forward it to the internet.
+- To survive reboots, enable Docker Desktop > Settings > General > *Start Docker Desktop when you sign in*, and keep the machine from sleeping if other devices rely on it.
+- `npm run dev` and the stack both use port 3000. Stop the stack (`scripts/sbuddy.sh stop`) before running the dev server.
+- The importer is not idempotent (re-running duplicates solutions), so `seed` only runs on an empty database.
 
 ## AMC 10 Problem Scraping
 

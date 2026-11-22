@@ -610,7 +610,8 @@
         }
 
         // API Configuration
-        const API_BASE = 'http://localhost:3000/api/v1/viewer';
+        // Relative so the page works from any host (e.g. other devices on the LAN)
+        const API_BASE = '/api/v1/viewer';
         let categoryId = null;
 
         // Load index and populate test selector

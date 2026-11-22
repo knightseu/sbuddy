@@ -12,6 +12,8 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "typecheck": "tsc --noEmit",
+    "deploy": "bash scripts/sbuddy.sh deploy",
+    "services": "bash scripts/sbuddy.sh",
     "migrate": "ts-node scripts/runMigrations.ts",
     "scrape-amc": "ts-node scripts/scrapeAMC.ts",
     "scrape-amc:test": "ts-node scripts/scrapeAMC.ts --test-connection",

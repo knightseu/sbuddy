@@ -7,10 +7,11 @@
 #   scripts/sbuddy.sh logs [service]       follow logs (default: api)
 #   scripts/sbuddy.sh rollback             return the API to the previously deployed image
 #   scripts/sbuddy.sh seed                 import crawled_data/ into an EMPTY database
-#   scripts/sbuddy.sh backup               pg_dump now (also runs before every deploy)
+#   scripts/sbuddy.sh backup               pg_dump + mirror crawled_data/mathcounts (also before every deploy)
 #   scripts/sbuddy.sh backups              list backups and the schedule
 #   scripts/sbuddy.sh verify [file]        restore into a scratch DB, compare row counts
 #   scripts/sbuddy.sh restore <file>       replace the live database with a backup
+#   scripts/sbuddy.sh restore-data [dir]   copy crawled_data/mathcounts back from a backup mirror
 #   scripts/sbuddy.sh schedule-backups     install the daily launchd job (unschedule-backups)
 #
 # Configuration comes from .env only: compose runs with a clean environment so
@@ -267,6 +268,13 @@ cmd_seed() {
 # Kinds: daily (scheduled), pre-deploy, pre-restore, manual.
 # Retention: daily keeps 7 newest + newest of each of the 4 weeks before
 # them; pre-deploy/pre-restore keep the 5 newest each; manual is never pruned.
+#
+# MATHCOUNTS data (crawled_data/mathcounts/: extracted Tests, review files and
+# source PDFs) is gitignored, so it exists only on this machine. Every backup
+# also mirrors it to <dir>/crawled_data/mathcounts/ in both places. The mirror
+# never deletes, and a file that changed is first moved to
+# <dir>/crawled_data/_replaced/<time>/, so a bad local edit can't overwrite the
+# only good copy.
 # ---------------------------------------------------------------------------
 
 KEEP_DAILY=7
@@ -329,6 +337,19 @@ prune_backups() {
   done
 }
 
+DATA_DIR="$ROOT/crawled_data/mathcounts"
+
+# Mirror DATA_DIR into <backup root>/crawled_data/mathcounts/
+mirror_data() {
+  local root="$1" stamp
+  [ -d "$DATA_DIR" ] || return 0
+  stamp=$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$root/crawled_data/mathcounts" || return 1
+  rsync -a --backup --backup-dir="$root/crawled_data/_replaced/$stamp" \
+    "$DATA_DIR/" "$root/crawled_data/mathcounts/" || return 1
+  log "Mirrored crawled_data/mathcounts to $root/crawled_data/mathcounts ($(du -sh "$root/crawled_data/mathcounts" | cut -f1 | tr -d ' '))" >&2
+}
+
 # Take a backup; prints the path of the new file on stdout.
 do_backup() {
   local kind="$1" dir copy sha file tmp
@@ -348,6 +369,7 @@ do_backup() {
   mv "$tmp" "$file"
   log "Backup written: $file ($(du -h "$file" | cut -f1 | tr -d ' '))" >&2
   prune_backups "$dir"
+  mirror_data "$dir" || { warn "could not mirror crawled_data/mathcounts to $dir"; return 1; }
 
   copy=$(backup_copy_dir)
   if [ -n "$copy" ]; then
@@ -358,6 +380,7 @@ do_backup() {
       warn "could not copy backup to BACKUP_COPY_DIR=$copy"
       return 1
     fi
+    mirror_data "$copy" || { warn "could not mirror crawled_data/mathcounts to BACKUP_COPY_DIR=$copy"; return 1; }
   fi
   echo "$file"
 }
@@ -493,6 +516,27 @@ cmd_restore() {
   log "Restored $(basename "$file")"
 }
 
+# Copy MATHCOUNTS data back from a backup mirror. Adds and overwrites files,
+# never deletes; afterwards re-import with: npm run import:mathcounts
+cmd_restore_data() {
+  local root="${1:-}" src answer
+  if [ -z "$root" ]; then
+    root=$(backup_dir)
+    [ -d "$root/crawled_data/mathcounts" ] || root=$(backup_copy_dir)
+  fi
+  src="$root/crawled_data/mathcounts"
+  [ -d "$src" ] || die "no mirror at $src"
+  echo "This copies $src"
+  echo "     into   $DATA_DIR"
+  echo "Files present in both are overwritten by the backup copy; nothing is deleted."
+  printf 'Type "restore" to continue: '
+  read -r answer
+  [ "$answer" = "restore" ] || die "aborted"
+  mkdir -p "$DATA_DIR"
+  rsync -a "$src/" "$DATA_DIR/"
+  log "Restored crawled_data/mathcounts ($(du -sh "$DATA_DIR" | cut -f1 | tr -d ' ')). Re-import with: npm run import:mathcounts"
+}
+
 backup_time() {
   local t; t=$(env_value BACKUP_TIME 03:00)
   echo "$t" | grep -Eq '^([01][0-9]|2[0-3]):[0-5][0-9]$' || die "BACKUP_TIME must be HH:MM, got: $t"
@@ -539,7 +583,7 @@ cmd_unschedule_backups() {
   log "Daily backup schedule removed"
 }
 
-usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd="${1:-}"
@@ -557,6 +601,7 @@ main() {
     backups)  cmd_backups ;;
     verify)   cmd_verify "$@" ;;
     restore)  cmd_restore "$@" ;;
+    restore-data) cmd_restore_data "$@" ;;
     schedule-backups)   cmd_schedule_backups ;;
     unschedule-backups) cmd_unschedule_backups ;;
     -h|--help|help|"") usage ;;

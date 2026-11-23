@@ -8,11 +8,13 @@ Usage:
         crawled_data/mathcounts/2025-chapter
 
 The work directory holds draft.json and figcrops/ (from extract.py), plus the
-review files written during the vision pass:
+review files written during the vision pass (by hand in the pilot, by
+vision.py in the bulk run):
 
 - review.json         metadata, unit overrides, alternatives, figure excludes
 - content-*.json      {"sprint-04": "<problem text, $LaTeX$>"}
 - answers-*.json      {"sprint-04": "$\\frac{2}{5}$"}
+- alternatives-*.json {"team-03": ["12.00"]}, other answers the key accepts
 - sol-*.json          {"sprint-04": "<official solution, $LaTeX$>"}; a solution
                       figure is referenced as [DIAGRAM: figures/solution-<key>.png],
                       the marker the viewer already turns into an <img>
@@ -64,7 +66,8 @@ def main(work, out):
 
     excluded = set(review.get("figureExclude", []))
     unit_overrides = review.get("unitOverrides", {})
-    alternatives = review.get("answerAlternatives", {})
+    # alternatives-*.json come from vision.py; review.json entries win
+    alternatives = {**merged(work, "alternatives-*.json"), **review.get("answerAlternatives", {})}
 
     (out / "figures").mkdir(parents=True, exist_ok=True)
     problems, missing = [], []

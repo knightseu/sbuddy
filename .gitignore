@@ -25,3 +25,5 @@ yarn-error.log*
 crawled_data/mathcounts/*
 !crawled_data/mathcounts/README.md
 public/test-images/mathcounts/
+
+__pycache__/

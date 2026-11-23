@@ -20,3 +20,8 @@ yarn-error.log*
 .idea/
 .vscode/
 .DS_Store
+
+# MATHCOUNTS content: personal use only, never committed (repo is public)
+crawled_data/mathcounts/*
+!crawled_data/mathcounts/README.md
+public/test-images/mathcounts/

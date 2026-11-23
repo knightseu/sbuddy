@@ -11,7 +11,8 @@ The work directory holds draft.json and figcrops/ (from extract.py), plus the
 review files written during the vision pass (by hand in the pilot, by
 vision.py in the bulk run):
 
-- review.json         metadata, unit overrides, alternatives, figure excludes
+- review.json         metadata, unit overrides, alternatives, figure excludes,
+                      skipRounds (Rounds left out, e.g. ["countdown"])
 - content-*.json      {"sprint-04": "<problem text, $LaTeX$>"}
 - answers-*.json      {"sprint-04": "$\\frac{2}{5}$"}
 - alternatives-*.json {"team-03": ["12.00"]}, other answers the key accepts
@@ -65,13 +66,14 @@ def main(work, out):
     solutions = merged(work, "sol-*.json")
 
     excluded = set(review.get("figureExclude", []))
+    skip = set(review.get("skipRounds", []))  # Rounds left out of this import, e.g. countdown
     unit_overrides = review.get("unitOverrides", {})
     # alternatives-*.json come from vision.py; review.json entries win
     alternatives = {**merged(work, "alternatives-*.json"), **review.get("answerAlternatives", {})}
 
     (out / "figures").mkdir(parents=True, exist_ok=True)
     problems, missing = [], []
-    for p in sorted(draft["problems"], key=lambda p: (ROUND_ORDER[p["round"]], p["problemNumber"])):
+    for p in sorted((p for p in draft["problems"] if p["round"] not in skip), key=lambda p: (ROUND_ORDER[p["round"]], p["problemNumber"])):
         key = f"{p['round']}-{p['problemNumber']:02d}"
         if key not in content:
             missing.append(f"{key}: content")

@@ -20,7 +20,10 @@ draft.json, and normally review.json. Decided in #19 (revised to OpenRouter):
   A key that fails is re-read once with FALLBACK (Kimi K3). Anything still
   failing goes to <work>/failures.json and the Test is not written. A person
   can accept a known failure in review.json:
-      "visionOverrides": {"sprint-27": ["overlap"]}
+      "visionOverrides": {"sprint-27": ["overlap"]}   ("*" for every key)
+  and correct a misread, or fix scanned pages that are out of order:
+      "visionCorrections": {"answers": {"team-09": "381,649"}}
+      "pageOrder": {"solutions": [1, 2, ..., 15, 17, 16]}
 - Every response is cached in _work/_vision-cache/, keyed by model + prompt +
   image bytes, so a re-run never pays twice.
 - Caps: $5 per Test and $100 per run, from the cost OpenRouter reports.
@@ -61,7 +64,8 @@ PRIMARY = "moonshotai/kimi-k3.1-pro"
 FALLBACK = "moonshotai/kimi-k3"
 TEST_CAP = 5.0
 RUN_CAP = 100.0
-OVERLAP_MIN = 0.90
+OVERLAP_MIN = 0.90  # share of the reading's words found in the text layer (guards invented prose)
+COVER_MIN = 0.75    # share of the text layer's words in the reading; lower, as the layer mixes in figure labels
 ROUNDS = ["sprint", "target", "team", "countdown"]
 DEFAULT_COUNTS = {"sprint": 30, "target": 8, "team": 10}
 SPOT_CHECK = 5
@@ -72,7 +76,9 @@ MATH_RULES = r"""- Write math in LaTeX between single dollar signs: $2 + (2 \tim
 - Symbols: ★ is $\bigstar$, ♥ is $\heartsuit$, ♣ is $\clubsuit$, ♦ is $\diamondsuit$, ♠ is $\spadesuit$.
 - Emphasised words: $\textit{word}$ or $\textbf{word}$. Never use Markdown (no *, **, #, | tables, code fences).
 - A table of data: $$\begin{array}{|c|c|} \hline a & b \\ \hline \end{array}$$
-- Join the lines of a paragraph with single spaces. Use a newline only between separate paragraphs or separate displayed lines."""
+- A formula displayed on its own line goes in $$...$$, joined to the surrounding text with a space, not a newline.
+- Plain numbers in prose stay plain text ("pick 5", "(21, 15, 12)"); use math for expressions and equations.
+- Join the lines of a paragraph with single spaces. Use a newline only between separate paragraphs."""
 
 PROBLEM_PROMPT = f"""This image is one problem from a MATHCOUNTS competition booklet. Transcribe the problem statement exactly.
 
@@ -80,7 +86,7 @@ PROBLEM_PROMPT = f"""This image is one problem from a MATHCOUNTS competition boo
 - Leave out the problem number, the answer blank, and any unit printed at the answer blank (such as "(cm²)" or "ways").
 - Keep every word of the problem, including instructions such as "Express your answer as a common fraction."
 {MATH_RULES}
-- In problem text, a number with a unit stays plain text ("84 in.", "15 cm", "60 kazoos"), and so do names of points and figures ("triangle XYZ", "rectangle ABCD", "XY"). Use math only for expressions, equations, variables such as $x$, and symbols such as $\\overline{{AB}}$ or $\\triangle ABC$.
+- In problem text, a number with a unit stays plain text ("84 in.", "15 cm", "60 kazoos"), including in measurements ("AB = 5 cm", "AE = 30 m"), and so do names of points and figures ("triangle XYZ", "rectangle ABCD", "XY"). Use math only for expressions, equations, variables such as $x$, and symbols such as $\\overline{{AB}}$ or $\\triangle ABC$.
 - If the figure contains a table of data, transcribe it as an array after the text. Do not describe pictures, graphs or geometric diagrams, and do not list their labels."""
 
 ANSWER_PROMPT = r"""This image is one page of a MATHCOUNTS answer key. List every answer on the page, in reading order, one per line, formatted exactly as:
@@ -160,11 +166,18 @@ class Client:
                 raise CapExceeded(f"run cap ${RUN_CAP:.2f} reached")
             if self.test_cost.get(test, 0.0) >= TEST_CAP:
                 raise CapExceeded(f"{test}: Test cap ${TEST_CAP:.2f} reached")
-        text, usage, cost = self.request(model, prompt, png)
-        with self.lock:
-            self.calls["api"] += 1
-            self.run_cost += cost
-            self.test_cost[test] = self.test_cost.get(test, 0.0) + cost
+        for _ in range(3):  # an empty reply (reasoning used up the output) is retried, never cached
+            text, usage, cost = self.request(model, prompt, png)
+            with self.lock:
+                self.calls["api"] += 1
+                self.run_cost += cost
+                self.test_cost[test] = self.test_cost.get(test, 0.0) + cost
+            if text.strip():
+                break
+        if not text.strip():
+            with self.lock:
+                self.calls["empty"] = self.calls.get("empty", 0) + 1
+            return ""
         path.write_text(json.dumps({
             "model": model, "image": image.name, "text": text, "usage": usage,
             "cost": cost, "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -258,13 +271,24 @@ def as_display(answer):
     return f"${answer}$" if re.search(r"[\\^_{}]", answer) else answer
 
 
+def resolve_round(explicit, rnd, prev_num, num):
+    """Round for an item: the explicit one, else the current one, moving to
+    the next Round when '?' numbering restarts (Sprint 30, then '? 4')."""
+    if explicit:
+        return explicit
+    if rnd in ROUNDS and prev_num is not None and num <= prev_num and rnd != ROUNDS[-1]:
+        return ROUNDS[ROUNDS.index(rnd) + 1]
+    return rnd
+
+
 def assemble_answers(page_texts):
     """Answers from pages in page order; '?' continues the last round seen."""
     answers, alternatives, source, warnings = {}, {}, {}, []
-    rnd = None
+    rnd, prev = None, None
     for page, text in page_texts:
         for item_rnd, num, vals in parse_answer_page(text):
-            rnd = item_rnd or rnd
+            rnd = resolve_round(item_rnd, rnd, prev, num)
+            prev = num
             if rnd is None or not vals:
                 warnings.append(f"{page}: answer {num} has no round")
                 continue
@@ -306,7 +330,7 @@ def parse_solution_page(text):
 
 def assemble_solutions(page_texts, figure_keys):
     solutions, source, warnings = {}, {}, []
-    rnd, last = None, None
+    rnd, last, prev = None, None, None
     for page, text in page_texts:
         for header, body in parse_solution_page(text):
             if header in ("continued", None):
@@ -317,7 +341,8 @@ def assemble_solutions(page_texts, figure_keys):
                     warnings.append(f"{page}: continued text with no solution before it")
                 continue
             h_rnd, num = header
-            rnd = h_rnd or rnd
+            rnd = resolve_round(h_rnd, rnd, prev, num)
+            prev = num
             if rnd is None:
                 warnings.append(f"{page}: solution {num} has no round")
                 continue
@@ -361,30 +386,45 @@ def tidy(text):
 # Gates
 
 
-def prose_words(text):
-    """Prose words of 3+ letters. Display blocks ($$...$$, often a table read
-    from a figure) are left out, since the text layer may have no prose for them."""
-    text = re.sub(r"\$\$.*?\$\$", " ", text or "", flags=re.S)
+def prose_words(text, displays=True):
+    """Prose words of 3+ letters, without LaTeX command and environment names.
+    displays=False leaves out $$...$$ blocks (often a table read from a
+    figure, which the text layer may lack)."""
+    text = text or ""
+    if not displays:
+        text = re.sub(r"\$\$.*?\$\$", " ", text, flags=re.S)
+    text = re.sub(r"\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?", " ", text)
     text = re.sub(r"\\[A-Za-z]+", " ", text)
     return set(re.findall(r"[a-z]{3,}", text.lower()))
 
 
 def overlap(text_layer, vision):
-    a, b = prose_words(text_layer), prose_words(vision)
+    """-> (covered, faithful): share of text-layer words in the reading
+    (display blocks included), and share of the reading's words outside
+    display blocks that are in the text layer."""
+    a = prose_words(text_layer)
     if not a:
-        return 1.0
-    if not b:
-        return 0.0
-    both = len(a & b)
-    return min(both / len(a), both / len(b))
+        return 1.0, 1.0
+    # the text layer runs words together ("dabcsuch", "evenn"), so a word also
+    # matches when it is inside a layer token, or the token is inside it
+    def found(w, pool):
+        return w in pool or any(len(x) >= 3 and (x in w or w in x) for x in pool)
+    seen = prose_words(vision)
+    covered = sum(found(w, seen) for w in a) / len(a)
+    b = prose_words(vision, displays=False)
+    faithful = sum(found(w, a) for w in b) / len(b) if b else 1.0
+    return covered, faithful
 
 
 def norm_value(s):
     s = (s or "").replace("\\$", "").replace("$", "")
     s = re.sub(r"\\(?:mathbf|textbf|boldsymbol|bm)\b", "", s)
     s = re.sub(r"\\text\s*\{[^{}]*\}", "", s)
+    s = re.sub(r"\\%|%|\^\s*\{?\\circ\}?|°|\\approx", "", s)  # 25% vs 25, 30° vs 30
     s = re.sub(r"\\[dt]frac", r"\\frac", s)
-    s = s.replace("{,}", ",")
+    s = s.replace("{,}", ",").replace("{:}", ":")
+    s = re.sub(r"\s*[ap]\.\s?m\.?\s*$", "", s, flags=re.I)  # 1:30 p.m. vs 1:30
+    s = re.sub(r"\s*\(?\s*base\s*(\d+)\s*\)?\s*$", r"_\1", s, flags=re.I)  # 33033 base 5 vs 33033_5
     s = re.sub(r"\\(?:left|right)\b|\\[,;:! ]", "", s)
     while True:
         new = re.sub(r"\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}", r"\1/\2", s)
@@ -393,7 +433,11 @@ def norm_value(s):
         s = new
     s = re.sub(r"[{}\s]", "", s)
     s = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", s)
-    return s.rstrip(".").lower()
+    s = s.rstrip(".")
+    s = re.sub(r"(?<![\d.])0(?=\.\d)", "", s)  # 0.46 vs .46
+    if s.startswith("(") and s.endswith(")"):  # (4, 1) vs 4, 1
+        s = s[1:-1]
+    return s.lower()
 
 
 def bold_values(solution):
@@ -410,12 +454,28 @@ def bold_values(solution):
     return vals
 
 
+def final_values(solution):
+    """Candidates for a solution's final answer: every bold value, plus each
+    token of its last 200 characters before the final "Ans" (the pre-2021
+    layout ends "... = 20 Ans." with no bold), or before the end."""
+    vals = bold_values(solution)
+    cut = [m.start() for m in re.finditer(r"\bAns\b", solution)]
+    tail = solution[:cut[-1]] if cut else solution
+    tail = re.sub(r"\\(?:underline|textbf|text|mathbf)\{", " ", tail[-200:])
+    vals += re.findall(r"\([^()]*\)", tail)[-1:]  # an ordered pair such as (6, 4)
+    for tok in re.split(r"\s+|=|\\approx|\$+|\\ |\(|\)", tail):
+        tok = tok.strip(".,;:!? ").removesuffix("\\")
+        if tok:
+            vals.append(tok)
+    return vals
+
+
 def gate(reading, draft, expected, has_solutions, overrides):
     """-> {key: [failure, ...]}; overrides lists failures a person accepted."""
     fails = {}
 
     def fail(k, kind, detail):
-        if kind not in overrides.get(k, []):
+        if kind not in overrides.get(k, []) and kind not in overrides.get("*", []):
             fails.setdefault(k, []).append({"gate": kind, "detail": detail})
 
     keys = [key_of(p["round"], p["problemNumber"]) for p in draft["problems"]]
@@ -425,9 +485,10 @@ def gate(reading, draft, expected, has_solutions, overrides):
         if not content:
             fail(k, "content", "no problem text")
         else:
-            ov = overlap(p["textLayer"], content)
-            if ov < OVERLAP_MIN:
-                fail(k, "overlap", f"prose overlap {ov:.0%}")
+            covered, faithful = overlap(p["textLayer"], content)
+            if faithful < OVERLAP_MIN or covered < COVER_MIN:
+                fail(k, "overlap", f"prose overlap: {faithful:.0%} of the reading in the text layer, "
+                                   f"{covered:.0%} of the text layer in the reading")
         answer = reading["answers"].get(k)
         if not answer:
             fail(k, "answer", "no answer")
@@ -437,9 +498,9 @@ def gate(reading, draft, expected, has_solutions, overrides):
                 fail(k, "solution", "no solution")
         if sol and answer:
             accepted = [answer] + reading["alternatives"].get(k, [])
-            bolds = {norm_value(b) for b in bold_values(sol)}
-            if not bolds & {norm_value(a) for a in accepted}:
-                fail(k, "final-value", f"answer {answer!r}, bold {sorted(bolds)}")
+            finals = {norm_value(b) for b in final_values(sol)}
+            if not finals & {norm_value(a) for a in accepted}:
+                fail(k, "final-value", f"answer {answer!r}, solution ends {sorted(finals)}")
     for rnd in ROUNDS:
         want = expected.get(rnd)
         got_p = sum(k.startswith(rnd + "-") for k in keys)
@@ -465,9 +526,19 @@ class Test:
         self.draft = json.loads((self.work / "draft.json").read_text())
         review_path = self.work / "review.json"
         self.review = json.loads(review_path.read_text()) if review_path.exists() else {}
+        # skipRounds (e.g. ["countdown"]) leaves those Rounds out entirely: not read, gated or built
+        self.skip = set(self.review.get("skipRounds", []))
+        self.draft["problems"] = [p for p in self.draft["problems"] if p["round"] not in self.skip]
         self.keys = [key_of(p["round"], p["problemNumber"]) for p in self.draft["problems"]]
         self.answer_pages = sorted((self.work / "pages").glob("answers-p*.png"), key=page_no)
         self.solution_pages = sorted((self.work / "pages").glob("solutions-p*.png"), key=page_no)
+        # pageOrder: {"solutions": [1, ..., 15, 17, 16]} for scans with pages out of sequence
+        for kind, order in self.review.get("pageOrder", {}).items():
+            pages = getattr(self, f"{kind[:-1]}_pages")
+            rank = {n: i for i, n in enumerate(order)}
+            pages.sort(key=lambda p: rank.get(page_no(p), len(order) + page_no(p)))
+        # visionCorrections: {"answers": {"team-09": "381,649"}, ...}, hand fixes applied over the reading
+        self.corrections = self.review.get("visionCorrections", {})
         self.figure_keys = set(self.review.get("solutionFigures", {}))
         self.overrides = self.review.get("visionOverrides", {})
         self.warnings = [] if review_path.exists() else ["no review.json: counts checked against defaults"]
@@ -475,7 +546,8 @@ class Test:
     def expected_counts(self):
         rounds = self.review.get("metadata", {}).get("rounds")
         if rounds:
-            return {r: v["problem_count"] for r, v in rounds.items() if "problem_count" in v}
+            return {r: v["problem_count"] for r, v in rounds.items()
+                    if "problem_count" in v and r not in self.skip}
         counts = dict(DEFAULT_COUNTS)
         counts = {r: n for r, n in counts.items() if any(k.startswith(r + "-") for k in self.keys)}
         return counts
@@ -497,7 +569,13 @@ class Test:
         solutions, s_src, w2 = assemble_solutions(
             [(p.name, results.get(("solutions", p.name))) for p in self.solution_pages],
             self.figure_keys)
-        solutions = {k: tidy(t) for k, t in solutions.items()}
+        kept = lambda k: k.split("-")[0] not in self.skip
+        answers = {k: a for k, a in answers.items() if kept(k)}
+        alternatives = {k: a for k, a in alternatives.items() if kept(k)}
+        solutions = {k: tidy(t) for k, t in solutions.items() if kept(k)}
+        for field, fixes in (("content", content), ("answers", answers),
+                             ("alternatives", alternatives), ("solutions", solutions)):
+            fixes.update(self.corrections.get(field, {}))
         return {"content": content, "answers": answers, "alternatives": alternatives,
                 "solutions": solutions, "answerSource": a_src, "solutionSource": s_src,
                 "warnings": w1 + w2}

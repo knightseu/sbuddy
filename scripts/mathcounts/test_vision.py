@@ -40,6 +40,12 @@ class ParseSolutions(unittest.TestCase):
         self.assertTrue(sols["target-01"].startswith("[DIAGRAM: figures/solution-target-01.png]"))
         self.assertEqual(warnings, [])
 
+    def test_restarted_numbering_moves_to_next_round(self):
+        pages = [("p1", "=== sprint 29\nA.\n=== ? 30\nB."), ("p2", "=== ? 1\nC.\n=== ? 2\nD.\n=== team 1\nE.")]
+        sols, _, warnings = v.assemble_solutions(pages, set())
+        self.assertEqual(sorted(sols), ["sprint-29", "sprint-30", "target-01", "target-02", "team-01"])
+        self.assertEqual(warnings, [])
+
     def test_diagram_without_rectangle_warns_and_is_dropped(self):
         sols, _, warnings = v.assemble_solutions([("p1", "=== team 3\nLook [DIAGRAM] here.")], set())
         self.assertEqual(sols["team-03"], "Look here.")
@@ -50,7 +56,7 @@ class Values(unittest.TestCase):
     def test_equivalent_forms_normalise_alike(self):
         same = [("$\\frac{2}{5}$", "\\mathbf{2/5}"), ("$\\frac{3}{88}$", "\\mathbf{\\dfrac{3}{88}}"),
                 ("18,050", "18{,}050"), ("12", "\\$12"), ("$2\\sqrt{3}$", "2\\sqrt3"),
-                ("9", "9\\text{ cm}")]
+                ("9", "9\\text{ cm}"), ("1:30 p.m.", "1{:}30\\text{ p.m.}")]
         for a, b in same:
             self.assertEqual(v.norm_value(a), v.norm_value(b), (a, b))
         self.assertNotEqual(v.norm_value("$\\frac{2}{5}$"), v.norm_value("5/2"))
@@ -60,13 +66,30 @@ class Values(unittest.TestCase):
                          ["\\frac{1}{2}", "7"])
 
 
+class FinalValues(unittest.TestCase):
+    def test_pre_2021_ans_layout(self):
+        for sol, ans in [("so $x + y = 7 + 3 = 20$ Ans.", "20"),
+                         ("$\\frac{8}{5\\pi} \\approx 0.509 \\approx 0.51$ Ans.", "0.51"),
+                         ("$\\frac{1}{4} = \\mathbf{25\\%}$ Ans.", "25"),
+                         ("The answer is 12 Ans.", "12"),
+                         ("$$\\frac{4}{30} = \\frac{2}{15}$$ $\\textbf{Ans.}$", "$\\frac{2}{15}$"),
+                         ("So $n$ must be 63. $\\textbf{Ans.}$", "63"),
+                         ("So the point is (6, 4) $\\textbf{Ans.}$", "(6, 4)"),
+                         ("$$0.36 + 0.09 \\approx 0.46\\ \\underline{\\textbf{Ans.}}$$", ".46")]:
+            self.assertIn(v.norm_value(ans), {v.norm_value(x) for x in v.final_values(sol)}, sol)
+
+
 class Overlap(unittest.TestCase):
     def test_invented_or_missing_prose_lowers_overlap(self):
         layer = "How many marbles are in the green jar after Pat adds seven more?"
-        self.assertEqual(v.overlap(layer, "How many marbles are in the green jar after Pat adds $7$ more? seven"), 1.0)
-        self.assertLess(v.overlap(layer, "How many marbles are in the jar?"), v.OVERLAP_MIN)
-        self.assertLess(v.overlap(layer, layer + " Assume every marble is blue, round, small and heavy."),
-                        v.OVERLAP_MIN)
+        self.assertEqual(v.overlap(layer, "How many marbles are in the green jar after Pat adds $7$ more? seven"),
+                         (1.0, 1.0))
+        covered, _ = v.overlap(layer, "How many marbles are in the jar?")
+        self.assertLess(covered, v.COVER_MIN)
+        _, faithful = v.overlap(layer, layer + " Assume every marble is blue, round, small and heavy.")
+        self.assertLess(faithful, v.OVERLAP_MIN)
+        covered, faithful = v.overlap("Number of Families " + layer, layer)
+        self.assertGreaterEqual(covered, v.COVER_MIN)  # figure labels in the layer are tolerated
 
 
 class Tidy(unittest.TestCase):

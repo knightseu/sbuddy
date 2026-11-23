@@ -55,6 +55,14 @@ COPY public ./public
 #   node dist/scripts/importTestData.js crawled_data
 COPY crawled_data ./crawled_data
 
+# MATHCOUNTS figures live with their Test in crawled_data (gitignored); put them
+# where the importer would, so they survive container rebuilds.
+RUN for d in crawled_data/mathcounts/[!_]*/figures; do \
+      [ -d "$d" ] || continue; \
+      t=$(basename "$(dirname "$d")"); \
+      mkdir -p "public/test-images/mathcounts/$t" && cp "$d"/* "public/test-images/mathcounts/$t/"; \
+    done
+
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && \
     chown -R nodejs:nodejs /app

@@ -22,6 +22,7 @@ router.get('/tags', testViewerController.getAllTags.bind(testViewerController));
 
 // Problems
 router.get('/tests/:testId/problems', testViewerController.getProblemsByTest.bind(testViewerController));
+router.get('/test-categories/:categoryId/problems', testViewerController.getProblemsByCategory.bind(testViewerController));
 router.get('/problems/search', testViewerController.searchProblems.bind(testViewerController));
 router.get('/problems/:problemId', testViewerController.getProblemById.bind(testViewerController));
 
@@ -37,6 +38,9 @@ router.delete('/study-plans/:planId', optionalAuth, studyPlanController.deleteSt
 
 // Study Plan Problems
 router.get('/study-plans/:planId/problems', optionalAuth, studyPlanController.getProblemsInPlan.bind(studyPlanController));
+router.get('/study-plans/:planId/problem-ids', optionalAuth, studyPlanController.getProblemIdsInPlan.bind(studyPlanController));
+router.post('/study-plans/:planId/problems', optionalAuth, studyPlanController.addProblemsToPlan.bind(studyPlanController));
+router.delete('/study-plans/:planId/problems', optionalAuth, studyPlanController.removeProblemsFromPlan.bind(studyPlanController));
 router.post('/study-plans/:planId/problems/:problemId', optionalAuth, studyPlanController.addProblemToPlan.bind(studyPlanController));
 router.delete('/study-plans/:planId/problems/:problemId', optionalAuth, studyPlanController.removeProblemFromPlan.bind(studyPlanController));
 router.put('/study-plans/:planId/problems/:problemId', optionalAuth, studyPlanController.updateProblemInPlan.bind(studyPlanController));

@@ -83,12 +83,16 @@ export class TestViewerController {
   async getProblemsByTest(req: Request, res: Response): Promise<void> {
     try {
       const { testId } = req.params;
-      const { tags, difficulty, page, limit } = req.query;
+      const { tags, difficulty, round, page, limit } = req.query;
 
       const filters: any = {
         page: page ? parseInt(page as string) : 1,
         limit: limit ? parseInt(limit as string) : 25
       };
+
+      if (round) {
+        filters.round = round as string;
+      }
 
       if (tags) {
         filters.tags = Array.isArray(tags) ? tags : [tags];
@@ -99,6 +103,17 @@ export class TestViewerController {
 
       const result = await testViewerService.getProblemsByTest(testId, filters);
       res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  async getProblemsByCategory(req: Request, res: Response): Promise<void> {
+    try {
+      const { categoryId } = req.params;
+      const { round } = req.query;
+      const problems = await testViewerService.getProblemsByCategory(categoryId, round ? (round as string) : undefined);
+      res.json({ success: true, data: problems });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

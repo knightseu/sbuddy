@@ -338,6 +338,65 @@ class StudyPlanManager {
         return false;
     }
 
+    // Ids of every problem in the active plan, as a Set (one request for a whole page)
+    async getProblemIdSet() {
+        await this.initialize();
+
+        if (!this.activePlan) return new Set();
+
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problem-ids`,
+                { headers: this.getHeaders() }
+            );
+            if (response.ok) {
+                const result = await response.json();
+                return new Set(result.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading plan problem ids:', error);
+        }
+        return new Set();
+    }
+
+    // Add many problems; returns the ids actually added (those not already in the plan),
+    // or null on failure
+    async addProblemsById(problemIds) {
+        return this.bulkRequest('POST', problemIds, 'added');
+    }
+
+    // Remove many problems; returns the ids that were removed, or null on failure
+    async removeProblemsById(problemIds) {
+        return this.bulkRequest('DELETE', problemIds, 'removed');
+    }
+
+    async bulkRequest(method, problemIds, key) {
+        await this.initialize();
+
+        if (!this.activePlan) {
+            await this.createPlan('My Study Plan', true);
+        }
+
+        try {
+            const response = await fetch(
+                `${this.apiBase}/study-plans/${this.activePlan.id}/problems`,
+                {
+                    method,
+                    headers: this.getHeaders(),
+                    body: JSON.stringify({ problemIds })
+                }
+            );
+            if (response.ok) {
+                const result = await response.json();
+                await this.loadPlans(); // refresh counts
+                return result.data[key] || [];
+            }
+        } catch (error) {
+            console.error(`Error in bulk ${method} on plan:`, error);
+        }
+        return null;
+    }
+
     // Toggle problem by ID
     async toggleProblemById(problemId) {
         const inPlan = await this.isProblemInPlanById(problemId);

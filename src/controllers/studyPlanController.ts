@@ -250,6 +250,55 @@ export class StudyPlanController {
     }
   }
 
+  async getProblemIdsInPlan(req: Request, res: Response): Promise<void> {
+    await this.withPlan(req, res, async (planId, userId) => {
+      const ids = await studyPlanService.getProblemIdsInPlan(planId, userId);
+      res.json({ success: true, data: ids });
+    });
+  }
+
+  async addProblemsToPlan(req: Request, res: Response): Promise<void> {
+    await this.withPlan(req, res, async (planId, userId, problemIds) => {
+      const added = await studyPlanService.addProblemsToPlan(planId, userId, problemIds!);
+      res.status(201).json({ success: true, data: { added } });
+    }, true);
+  }
+
+  async removeProblemsFromPlan(req: Request, res: Response): Promise<void> {
+    await this.withPlan(req, res, async (planId, userId, problemIds) => {
+      const removed = await studyPlanService.removeProblemsFromPlan(planId, userId, problemIds!);
+      res.json({ success: true, data: { removed } });
+    }, true);
+  }
+
+  // Shared auth, body validation and error mapping for the plan-wide handlers.
+  private async withPlan(
+    req: Request,
+    res: Response,
+    handler: (planId: string, userId: string, problemIds?: string[]) => Promise<void>,
+    needsIds = false
+  ): Promise<void> {
+    try {
+      const userId = (req as any).user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+      const problemIds = req.body?.problemIds;
+      if (needsIds && (!Array.isArray(problemIds) || problemIds.some(id => typeof id !== 'string'))) {
+        res.status(400).json({ success: false, error: 'problemIds must be an array of ids' });
+        return;
+      }
+      await handler(req.params.planId, userId, problemIds);
+    } catch (error: any) {
+      if (error.message === 'Study plan not found') {
+        res.status(404).json({ success: false, error: error.message });
+      } else {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    }
+  }
+
   async checkProblemInPlan(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as any).user?.userId;

@@ -18,6 +18,7 @@
         };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    <script src="rounds.js"></script>
     <style>
         * {
             margin: 0;
@@ -221,6 +222,33 @@
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease;
+        }
+
+        /* Line breaks in Problem and solution text are kept (#16). Applied to a
+           wrapper holding only the text, so template whitespace isn't shown. */
+        .rich-text {
+            white-space: pre-line;
+            overflow-x: auto; /* a long equation can't wrap; scroll rather than clip */
+        }
+
+        .answer-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px 20px;
+        }
+
+        .answer-card .solution-header { margin-bottom: 0; }
+
+        .answer-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .answer-alternatives {
+            margin-top: 6px;
+            color: #6c757d;
+            font-size: 0.95rem;
         }
 
         .solution-content.expanded {
@@ -522,7 +550,7 @@
                 currentTestId = currentProblem.testId;
 
                 // Load all problems from the same test for navigation
-                const testResponse = await fetch(`/api/v1/viewer/tests/${currentTestId}/problems`);
+                const testResponse = await fetch(`/api/v1/viewer/tests/${currentTestId}/problems?limit=1000`);
                 if (testResponse.ok) {
                     const testResult = await testResponse.json();
                     allProblems = testResult.data || [];
@@ -530,11 +558,12 @@
 
                 // Update page title
                 document.getElementById('problemTitle').textContent =
-                    `${currentProblem.testName || 'Problem'} - Problem ${currentProblem.problemNumber}`;
+                    `${currentProblem.testName || 'Problem'} - ${Rounds.problemLabel(currentProblem)}`;
 
-                // Update back button to remember the test
+                // Update back button to remember the Test and Round
                 if (currentTestId) {
-                    document.getElementById('backBtn').href = `index.html?testId=${currentTestId}`;
+                    const round = currentProblem.round ? `&round=${encodeURIComponent(currentProblem.round)}` : '';
+                    document.getElementById('backBtn').href = `index.html?testId=${currentTestId}${round}`;
                 }
 
                 displayProblem(currentProblem);
@@ -581,10 +610,9 @@
             // Convert [katex]...[/katex] to $...$ for MathJax
             const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
             // Convert [DIAGRAM: URL] markers to actual image tags
+            // One line: .rich-text keeps newlines (white-space: pre-line)
             return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
-                return `<div style="margin: 15px 0; text-align: center;">
-                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-                </div>`;
+                return `<div style="margin: 15px 0; text-align: center;"><img src="${url.trim()}" alt="Diagram" style="max-width: 100%; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" /></div>`;
             });
         }
 
@@ -604,7 +632,7 @@
         }
 
         function displayProblem(problem) {
-            document.getElementById('problemTitle').textContent = `Problem ${problem.problemNumber}`;
+            document.getElementById('problemTitle').textContent = Rounds.problemLabel(problem);
             document.getElementById('difficultyBadge').innerHTML =
                 `<span class="difficulty-badge ${problem.difficulty}">${problem.difficulty}</span>`;
 
@@ -628,14 +656,24 @@
                                     <div class="solution-title">Solution ${idx + 1}</div>
                                     <button class="toggle-btn" id="toggleBtn${idx}">Show</button>
                                 </div>
-                                <div class="solution-content" id="solution${idx}">
-                                    ${formatSolutionWithDiagrams(solutionText)}
-                                </div>
+                                <div class="solution-content" id="solution${idx}"><div class="rich-text">${formatSolutionWithDiagrams(solutionText)}</div></div>
                             </div>
                         `}).join('')}
                     </div>
                 </div>
             ` : '<div class="section"><h2>Solutions</h2><p>No solutions available</p></div>';
+
+            const answerHtml = problem.correctAnswer ? `
+                <div class="section">
+                    <div class="answer-card">
+                        <div class="solution-header" onclick="toggleSolution('Answer')">
+                            <div class="solution-title">Answer</div>
+                            <button class="toggle-btn" id="toggleBtnAnswer">Show</button>
+                        </div>
+                        <div class="solution-content" id="solutionAnswer">${Rounds.formatAnswerBlock(problem)}</div>
+                    </div>
+                </div>
+            ` : '';
 
             // Handle both old format (topics array) and new API format (tags array)
             const topics = problem.topics || (problem.tags ? problem.tags.map(t => t.name) : []);
@@ -680,8 +718,8 @@
                         <div class="value">${testName}</div>
                     </div>
                     <div class="info-item">
-                        <label>Problem Number</label>
-                        <div class="value">${problem.problemNumber}</div>
+                        <label>Problem</label>
+                        <div class="value">${problem.round ? Rounds.problemLabel(problem) : problem.problemNumber}</div>
                     </div>
                     <div class="info-item">
                         <label>Difficulty</label>
@@ -691,13 +729,12 @@
 
                 <div class="section">
                     <h2>Problem Statement</h2>
-                    <div class="problem-statement">
-                        ${formatSolutionWithDiagrams(problem.content || '')}
-                    </div>
+                    <div class="problem-statement"><div class="rich-text">${formatSolutionWithDiagrams(problem.content || '')}</div></div>
                     ${choicesHtml}
                     ${imagesHtml}
                 </div>
 
+                ${answerHtml}
                 ${solutionsHtml}
                 ${topicsHtml}
                 ${seeAlsoHtml}

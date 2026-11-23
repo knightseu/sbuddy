@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMC Problems Viewer - 2012 AMC 10A</title>
+    <title>Problems Viewer</title>
     <style>
         * {
             margin: 0;
@@ -435,6 +435,139 @@
             background: #5a6268;
         }
 
+        .selector {
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 1rem;
+            min-width: 200px;
+        }
+
+        /* Line breaks in Problem text are kept (#16) */
+        .problem-preview {
+            white-space: pre-line;
+        }
+
+        .round-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .round-tab {
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            padding: 10px 18px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+        }
+
+        .round-tab:hover { color: #495057; }
+
+        .round-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .round-count {
+            font-weight: 400;
+            font-size: 0.85rem;
+        }
+
+        .round-bar, .test-group-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .round-bar .bulk-btn, .test-group-header .bulk-btn { margin-left: auto; }
+
+        .test-group { margin-bottom: 30px; }
+
+        .test-group-header a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 1.1rem;
+        }
+
+        .group-count {
+            font-weight: 400;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .bulk-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .bulk-btn:hover { background: #218838; }
+        .bulk-btn.in-plan { background: #6c757d; }
+        .bulk-btn.in-plan:hover { background: #5a6268; }
+        .bulk-btn:disabled { opacity: 0.5; cursor: default; }
+
+        .show-all-btn {
+            background: none;
+            border: 1px dashed #adb5bd;
+            color: #667eea;
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(150%);
+            background: #343a40;
+            color: white;
+            padding: 14px 20px;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            transition: transform 0.25s, visibility 0.25s;
+            visibility: hidden;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            visibility: visible;
+        }
+
+        .toast button {
+            background: none;
+            border: none;
+            color: #8fa4ff;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
         @media print {
             /* Image sizing for A4 paper */
             img {
@@ -450,6 +583,8 @@
 
             /* Hide UI elements when printing */
             .add-to-plan-btn,
+            .round-tabs,
+            .toast,
             .filter-section,
             .search-section,
             button {
@@ -505,15 +640,20 @@
                     <span class="study-plan-count" id="planCount">0</span>
                 </a>
             </div>
-            <h1>AMC Problems Viewer</h1>
+            <h1 id="pageTitle">Problems Viewer</h1>
             <p id="testDescription">Interactive Problem Browser</p>
         </div>
 
         <div class="test-selector-section" style="background: #f8f9fa; padding: 20px; margin: 20px 40px; border-radius: 12px;">
-            <label for="testSelector" style="font-weight: 600; margin-right: 10px;">Select Test:</label>
-            <select id="testSelector" onchange="switchTest()" style="padding: 10px; border: 2px solid #667eea; border-radius: 8px; font-size: 1rem; min-width: 200px;">
+            <label for="categorySelector" style="font-weight: 600; margin-right: 10px;">Competition:</label>
+            <select id="categorySelector" onchange="switchCategory()" class="selector">
+                <option value="">Loading...</option>
+            </select>
+            <label for="testSelector" style="font-weight: 600; margin: 0 10px 0 20px;">Test:</label>
+            <select id="testSelector" onchange="switchTest()" class="selector">
                 <option value="">Loading tests...</option>
             </select>
+            <span id="testBulk" style="margin-left: 15px;"></span>
         </div>
 
         <div class="metadata" id="metadata">
@@ -522,6 +662,7 @@
 
         <div class="problems-section">
             <h2>Problems</h2>
+            <div class="round-tabs" id="roundTabs" style="display: none;"></div>
             <div class="filter-controls" id="filters">
                 <button class="filter-btn active" data-filter="all">All Problems</button>
                 <button class="filter-btn" data-filter="easy">Easy</button>
@@ -534,13 +675,30 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
+    <script src="rounds.js"></script>
     <script>
-        let allProblems = [];
-        let currentFilter = 'all';
+        // ============ State ============
+        // The page shows one Competition, then either one Test or "All Tests" (ALL),
+        // then optionally one Round. Single-Round Tests (AMC) have no Round tabs.
+        const ALL = 'all';
+        const API_BASE = '/api/v1/viewer';
+        const CONFIRM_ABOVE = 100;     // bulk adds bigger than this ask first
+        const GROUP_PREVIEW = 3;       // cross-Test groups show this many until expanded
+
+        let categories = [];
+        let currentCategory = null;
         let availableTests = [];
-        let currentTest = null;
+        let currentTest = null;        // null in the All Tests view
+        let currentRound = null;       // null when the view has no Rounds
+        let allProblems = [];          // every Problem in the current view (Round applied)
+        let currentFilter = 'all';     // difficulty filter
+        let planIds = new Set();       // ids in the active study plan
+        const expandedGroups = new Set();
         let mathJaxPoll = null;
 
+        // ============ Formatting ============
         function sanitizeCurrency(text) {
             if (!text) return text;
             // Handle $ $X$ pattern (dollar space dollar number dollar) - fix spacing issue
@@ -555,25 +713,14 @@
             // Convert [katex]...[/katex] to $...$ for MathJax
             const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
             return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
-                return `<div style="margin: 12px 0; text-align: center;">
-                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: auto; max-height: 300px; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
-                </div>`;
+                // One line: .problem-preview keeps newlines (white-space: pre-line)
+                return `<div style="margin: 12px 0; text-align: center;"><img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: auto; max-height: 300px; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" /></div>`;
             });
         }
 
-        function formatChoice(choice) {
-            if (!choice) return choice;
-            // First apply standard formatting
-            let formatted = formatSolutionWithDiagrams(choice);
-            // If contains LaTeX commands but not wrapped in $...$ or $$...$$, wrap it
-            if (/\\[a-zA-Z]+/.test(formatted) && !formatted.includes('$')) {
-                formatted = `$${formatted}$`;
-            }
-            return formatted;
-        }
-
+        // Line breaks are rendered by white-space: pre-line on .problem-preview (#16)
         function formatProblemPreview(content) {
-            return formatSolutionWithDiagrams(content).replace(/\n/g, '<br>');
+            return formatSolutionWithDiagrams(content);
         }
 
         function typesetMath(element) {
@@ -609,74 +756,35 @@
             }
         }
 
-        // API Configuration
-        // Relative so the page works from any host (e.g. other devices on the LAN)
-        const API_BASE = '/api/v1/viewer';
-        let categoryId = null;
+        // ============ Loading ============
+        async function getJson(url) {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || `Request failed: ${url}`);
+            return data;
+        }
 
-        // Load index and populate test selector
         async function loadIndex() {
             try {
-                console.log('Loading test categories...');
-                // First get categories
-                const categoriesResponse = await fetch(`${API_BASE}/test-categories`);
-                const categoriesData = await categoriesResponse.json();
-                console.log('Categories loaded:', categoriesData);
+                categories = (await getJson(`${API_BASE}/test-categories`)).data;
+                if (categories.length === 0) throw new Error('No test categories found');
 
-                if (!categoriesData.success || categoriesData.data.length === 0) {
-                    throw new Error('No test categories found');
+                const params = new URLSearchParams(window.location.search);
+                const testId = params.get('testId');
+                let categoryId = params.get('categoryId');
+
+                // A shared link may carry only a testId; find its Competition
+                if (!categoryId && testId && testId !== ALL) {
+                    try {
+                        categoryId = (await getJson(`${API_BASE}/tests/${testId}`)).data.categoryId;
+                    } catch (e) { /* fall back to the first Competition */ }
                 }
 
-                // Use the first category (AMC)
-                categoryId = categoriesData.data[0].id;
-                console.log('Using category ID:', categoryId);
-
-                // Get all tests for this category
-                const testsResponse = await fetch(`${API_BASE}/test-categories/${categoryId}/tests`);
-                const testsData = await testsResponse.json();
-                console.log('Tests loaded:', testsData);
-
-                if (!testsData.success) {
-                    throw new Error('Failed to load tests');
-                }
-
-                availableTests = testsData.data;
-                console.log('Available tests count:', availableTests.length);
-
-                // Populate test selector
-                const selector = document.getElementById('testSelector');
-                selector.innerHTML = availableTests.map((test, index) =>
-                    `<option value="${index}">${test.name} (${test.problemCount} problems)</option>`
+                document.getElementById('categorySelector').innerHTML = categories.map(c =>
+                    `<option value="${c.id}">${c.displayName} (${c.testCount} tests)</option>`
                 ).join('');
-                console.log('Test selector populated with', availableTests.length, 'options');
 
-                // Check if there's a testId parameter in URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const testId = urlParams.get('testId');
-
-                let testToLoad = null;
-                let testIndex = 0;
-
-                if (testId) {
-                    // Find the test with matching ID
-                    testIndex = availableTests.findIndex(test => test.id === testId);
-                    if (testIndex >= 0) {
-                        testToLoad = availableTests[testIndex];
-                        selector.value = testIndex;
-                        console.log('Loading test from URL parameter:', testToLoad.name);
-                    }
-                }
-
-                // Load specified test or first test by default
-                if (!testToLoad && availableTests.length > 0) {
-                    testToLoad = availableTests[0];
-                    console.log('Loading default test:', testToLoad.name);
-                }
-
-                if (testToLoad) {
-                    currentTest = testToLoad;
-                    await loadTest(currentTest);
-                }
+                await selectCategory(categoryId, testId, params.get('round'));
             } catch (error) {
                 console.error('Error loading index:', error);
                 document.getElementById('testSelector').innerHTML =
@@ -684,44 +792,75 @@
             }
         }
 
-        // Load a specific test
-        async function loadTest(test) {
-            try {
-                // Fetch problems for this test from API
-                const response = await fetch(`${API_BASE}/tests/${test.id}/problems`);
-                const problemsData = await response.json();
+        async function selectCategory(categoryId, testId, round) {
+            currentCategory = categories.find(c => c.id === categoryId) || categories[0];
+            document.getElementById('categorySelector').value = currentCategory.id;
+            expandedGroups.clear();
 
-                if (!problemsData.success) {
-                    throw new Error('Failed to load problems');
+            availableTests = (await getJson(`${API_BASE}/test-categories/${currentCategory.id}/tests`)).data;
+
+            const selector = document.getElementById('testSelector');
+            selector.innerHTML =
+                `<option value="${ALL}">— All ${currentCategory.displayName} Tests —</option>` +
+                availableTests.map(test =>
+                    `<option value="${test.id}">${test.name} (${test.problemCount} problems)</option>`
+                ).join('');
+
+            if (testId === ALL) {
+                currentTest = null;
+            } else {
+                currentTest = availableTests.find(t => t.id === testId) || availableTests[0] || null;
+            }
+            selector.value = currentTest ? currentTest.id : ALL;
+
+            await loadView(round);
+        }
+
+        // Rounds offered by the current view: the Test's own, or every Round any Test holds
+        function viewRounds() {
+            if (currentTest) return currentTest.rounds || [];
+            const counts = new Map();
+            for (const test of availableTests) {
+                for (const r of test.rounds || []) {
+                    counts.set(r.round, (counts.get(r.round) || 0) + r.problemCount);
+                }
+            }
+            // Keep the first Test's sitting order, then any Rounds only later Tests hold
+            return [...counts.entries()].map(([round, problemCount]) => ({ round, problemCount }));
+        }
+
+        async function loadView(requestedRound) {
+            try {
+                const rounds = viewRounds();
+                currentRound = rounds.length === 0 ? null
+                    : (rounds.find(r => r.round === requestedRound) || rounds[0]).round;
+                updateUrl();
+
+                const roundQuery = currentRound ? `round=${encodeURIComponent(currentRound)}` : '';
+                if (currentTest) {
+                    allProblems = (await getJson(
+                        `${API_BASE}/tests/${currentTest.id}/problems?limit=1000&${roundQuery}`)).data;
+                } else {
+                    allProblems = (await getJson(
+                        `${API_BASE}/test-categories/${currentCategory.id}/problems?${roundQuery}`)).data;
                 }
 
-                // Update header
-                document.getElementById('testDescription').textContent =
-                    `${test.name} - Interactive Problem Browser`;
+                document.getElementById('testDescription').textContent = currentTest
+                    ? `${currentTest.name} - Interactive Problem Browser`
+                    : `All ${currentCategory.displayName} Tests - Interactive Problem Browser`;
 
-                // Convert API data to the format expected by existing functions
-                const metadata = {
-                    year: test.year,
-                    test: test.name,
-                    totalProblems: test.problemCount,
-                    source: test.sourceUrl
-                };
+                displayMetadata();
+                renderRoundTabs(rounds);
 
-                allProblems = problemsData.data;
                 currentFilter = 'all';
-
-                displayMetadata(metadata, allProblems);
-
-                // Reset filter buttons
                 document.querySelectorAll('.filter-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.dataset.filter === 'all') btn.classList.add('active');
+                    btn.classList.toggle('active', btn.dataset.filter === 'all');
                 });
 
-                displayProblems(allProblems);
-                setupFilters();
+                planIds = await window.studyPlanManager.getProblemIdSet();
+                displayProblems();
             } catch (error) {
-                console.error('Error loading test:', error);
+                console.error('Error loading view:', error);
                 document.getElementById('metadata').innerHTML =
                     '<div class="error">Error loading test data: ' + error.message + '</div>';
                 document.getElementById('problemsList').innerHTML =
@@ -729,138 +868,313 @@
             }
         }
 
-        // Switch test when selector changes
+        function updateUrl() {
+            const params = new URLSearchParams();
+            params.set('categoryId', currentCategory.id);
+            params.set('testId', currentTest ? currentTest.id : ALL);
+            if (currentRound) params.set('round', currentRound);
+            history.replaceState(null, '', `${window.location.pathname}?${params}`);
+        }
+
+        async function switchCategory() {
+            await selectCategory(document.getElementById('categorySelector').value, null, null);
+        }
+
         async function switchTest() {
-            const selector = document.getElementById('testSelector');
-            const testIndex = parseInt(selector.value);
-            console.log('Switching test:', testIndex, 'Total tests:', availableTests.length);
+            const value = document.getElementById('testSelector').value;
+            currentTest = value === ALL ? null : availableTests.find(t => t.id === value);
+            expandedGroups.clear();
+            // Stay on the same Round when the new view has it
+            await loadView(currentRound);
+        }
 
-            if (!isNaN(testIndex) && testIndex >= 0 && testIndex < availableTests.length) {
-                currentTest = availableTests[testIndex];
-                console.log('Loading test:', currentTest.name);
-                await loadTest(currentTest);
-            } else {
-                console.error('Invalid test index:', testIndex);
+        async function switchRound(round) {
+            expandedGroups.clear();
+            await loadView(round);
+        }
+
+        // ============ Rendering ============
+        function displayMetadata() {
+            const metadata = document.getElementById('metadata');
+            if (!currentTest) {
+                const total = availableTests.reduce((sum, t) => sum + (t.problemCount || 0), 0);
+                metadata.innerHTML = `
+                    <h2>Dataset Information</h2>
+                    <div class="metadata-grid">
+                        <div class="metadata-item"><label>Competition</label><div class="value">${currentCategory.displayName}</div></div>
+                        <div class="metadata-item"><label>Tests</label><div class="value">${availableTests.length}</div></div>
+                        <div class="metadata-item"><label>Total Problems</label><div class="value">${total}</div></div>
+                    </div>`;
+                return;
             }
-        }
 
-        // Initialize - load index first
-        async function loadData() {
-            await loadIndex();
-        }
-
-        function displayMetadata(metadata, problems) {
-            const difficultyCount = problems.reduce((acc, p) => {
+            const difficultyCount = allProblems.reduce((acc, p) => {
                 acc[p.difficulty] = (acc[p.difficulty] || 0) + 1;
                 return acc;
             }, {});
+            const withSolutions = allProblems.length
+                ? (allProblems.reduce((sum, p) => sum + (p.solutionCount || 0), 0) / allProblems.length).toFixed(1)
+                : '0';
+            const crawled = currentTest.crawledAt
+                ? `<span class="stat-badge">Crawled: ${new Date(currentTest.crawledAt).toLocaleDateString()}</span>` : '';
 
-            const avgSolutions = (problems.reduce((sum, p) => sum + (p.solutions?.length || 0), 0) / problems.length).toFixed(1);
-
-            const html = `
+            metadata.innerHTML = `
                 <h2>Dataset Information</h2>
                 <div class="metadata-grid">
-                    <div class="metadata-item">
-                        <label>Year</label>
-                        <div class="value">${metadata.year}</div>
-                    </div>
-                    <div class="metadata-item">
-                        <label>Test</label>
-                        <div class="value">${metadata.test}</div>
-                    </div>
-                    <div class="metadata-item">
-                        <label>Total Problems</label>
-                        <div class="value">${metadata.totalProblems}</div>
-                    </div>
-                    <div class="metadata-item">
-                        <label>Avg Solutions</label>
-                        <div class="value">${avgSolutions}</div>
-                    </div>
+                    <div class="metadata-item"><label>Year</label><div class="value">${currentTest.year ?? ''}</div></div>
+                    <div class="metadata-item"><label>Test</label><div class="value">${currentTest.name}</div></div>
+                    <div class="metadata-item"><label>Total Problems</label><div class="value">${currentTest.problemCount}</div></div>
+                    <div class="metadata-item"><label>Avg Solutions</label><div class="value">${withSolutions}</div></div>
                 </div>
                 <div class="stats">
                     <span class="stat-badge easy">Easy: ${difficultyCount.easy || 0}</span>
                     <span class="stat-badge medium">Medium: ${difficultyCount.medium || 0}</span>
                     <span class="stat-badge hard">Hard: ${difficultyCount.hard || 0}</span>
-                    <span class="stat-badge">Crawled: ${new Date(metadata.crawledAt).toLocaleDateString()}</span>
-                </div>
-            `;
-
-            document.getElementById('metadata').innerHTML = html;
+                    ${crawled}
+                </div>`;
         }
 
-        async function displayProblems(problems) {
-            // Temporarily show problems without plan status
-            const html = problems.map(problem => {
-                const previewContent = formatProblemPreview(problem.content);
-                return `
+        function renderRoundTabs(rounds) {
+            const tabs = document.getElementById('roundTabs');
+            if (rounds.length === 0) {
+                tabs.style.display = 'none';
+                tabs.innerHTML = '';
+                return;
+            }
+            tabs.style.display = 'flex';
+            tabs.innerHTML = rounds.map(r => `
+                <button class="round-tab ${r.round === currentRound ? 'active' : ''}" onclick="switchRound('${r.round}')">
+                    ${Rounds.roundLabel(r.round)} <span class="round-count">(${r.problemCount})</span>
+                </button>`).join('');
+        }
+
+        function visibleProblems() {
+            return currentFilter === 'all' ? allProblems : allProblems.filter(p => p.difficulty === currentFilter);
+        }
+
+        function problemCard(problem) {
+            const inPlan = planIds.has(problem.id);
+            const tagCount = problem.tagCount ?? problem.tags?.length ?? 0;
+            return `
                 <div class="problem-card" data-problem-id="${problem.id}">
                     <div class="problem-number" onclick="viewProblem('${problem.id}')">${problem.problemNumber}</div>
                     <div class="problem-content" onclick="viewProblem('${problem.id}')">
                         <div class="problem-header">
-                            <div class="problem-title">Problem ${problem.problemNumber}</div>
+                            <div class="problem-title">${Rounds.problemLabel(problem)}</div>
                             <div class="difficulty-badge ${problem.difficulty}">${problem.difficulty}</div>
                         </div>
-                        <div class="problem-preview">
-                            ${previewContent}
-                        </div>
+                        <div class="problem-preview">${formatProblemPreview(problem.content)}</div>
                         <div class="problem-meta">
-                            <span>📝 ${problem.solutions?.length || 0} solutions</span>
+                            <span>📝 ${problem.solutionCount || 0} solutions</span>
                             <span>🖼️ ${problem.images?.length || 0} images</span>
-                            ${problem.tags?.length ? `<span>🏷️ ${problem.tags.length} tags</span>` : ''}
+                            ${tagCount ? `<span>🏷️ ${tagCount} tags</span>` : ''}
                         </div>
                     </div>
-                    <button class="add-to-plan-btn" onclick="event.stopPropagation(); toggleStudyPlan('${problem.id}', this)">
-                        Loading...
+                    <button class="add-to-plan-btn ${inPlan ? 'in-plan' : ''}" onclick="event.stopPropagation(); toggleStudyPlan('${problem.id}', this)">
+                        ${inPlan ? '✓ In Study Plan' : '+ Add to Study Plan'}
                     </button>
-                </div>
-            `;
-            }).join('');
-
-            const listEl = document.getElementById('problemsList');
-            listEl.innerHTML = html || '<div class="loading">No problems found</div>';
-            typesetMath(listEl);
-
-            // Now update button states asynchronously
-            for (const problem of problems) {
-                const inPlan = await window.studyPlanManager.isProblemInPlanById(problem.id);
-                const card = listEl.querySelector(`[data-problem-id="${problem.id}"]`);
-                if (card) {
-                    const button = card.querySelector('.add-to-plan-btn');
-                    button.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
-                    button.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
-                }
-            }
+                </div>`;
         }
 
+        // A bulk add/remove button for a named set of Problems. The set is
+        // registered by key so onclick handlers don't carry id lists.
+        const bulkSets = new Map();
+        function bulkButton(key, label, problems) {
+            bulkSets.set(key, { label, ids: problems.map(p => p.id) });
+            return `<button class="bulk-btn" data-bulk-key="${key}" onclick="bulkToggle('${key}')"></button>`;
+        }
+
+        function refreshBulkButtons() {
+            document.querySelectorAll('.bulk-btn').forEach(btn => {
+                const set = bulkSets.get(btn.dataset.bulkKey);
+                if (!set) return;
+                const missing = set.ids.filter(id => !planIds.has(id)).length;
+                const allIn = set.ids.length > 0 && missing === 0;
+                btn.classList.toggle('in-plan', allIn);
+                btn.disabled = set.ids.length === 0;
+                btn.textContent = allIn
+                    ? `✓ ${set.label} in plan (remove)`
+                    : missing === set.ids.length
+                        ? `+ Add ${set.label} (${set.ids.length})`
+                        : `+ Add ${set.label} (${missing} of ${set.ids.length} missing)`;
+            });
+        }
+
+        function displayProblems() {
+            bulkSets.clear();
+            const problems = visibleProblems();
+            const roundName = currentRound ? Rounds.roundLabel(currentRound) : null;
+
+            // Whole-Test button next to the selectors, for every Test (AMC included)
+            const testBulk = document.getElementById('testBulk');
+            if (currentTest) {
+                // The whole Test spans every Round, so it needs all ids, not just this
+                // tab's; the button stays disabled until they arrive
+                testBulk.innerHTML = bulkButton('test', 'whole Test', []);
+                const testId = currentTest.id;
+                loadWholeTestIds(testId).then(ids => {
+                    if (currentTest?.id !== testId) return;
+                    bulkSets.set('test', { label: 'whole Test', ids });
+                    refreshBulkButtons();
+                });
+            } else {
+                testBulk.innerHTML = problems.length
+                    ? bulkButton('shown', 'all shown', problems) : '';
+            }
+
+            const listEl = document.getElementById('problemsList');
+            let html;
+            if (currentTest) {
+                const roundBar = roundName
+                    ? `<div class="round-bar"><span>${roundName} Round · ${problems.length} problems</span>${bulkButton('round', `whole ${roundName} Round`, allProblems)}</div>`
+                    : '';
+                html = roundBar + (problems.map(problemCard).join('') || '<div class="loading">No problems found</div>');
+            } else {
+                html = renderGroups(problems, roundName);
+            }
+            listEl.innerHTML = html;
+            refreshBulkButtons();
+            typesetMath(listEl);
+        }
+
+        // Cross-Test view: one group per Test, collapsed to its first few Problems
+        function renderGroups(problems, roundName) {
+            const groups = [];
+            for (const p of problems) {
+                const last = groups[groups.length - 1];
+                if (last && last.testId === p.testId) last.problems.push(p);
+                else groups.push({ testId: p.testId, testName: p.testName, problems: [p] });
+            }
+            if (groups.length === 0) return '<div class="loading">No problems found</div>';
+
+            return groups.map(g => {
+                const expanded = expandedGroups.has(g.testId);
+                const shown = expanded ? g.problems : g.problems.slice(0, GROUP_PREVIEW);
+                const more = g.problems.length - shown.length;
+                const label = roundName ? `this ${roundName} Round` : 'this Test';
+                return `
+                    <div class="test-group">
+                        <div class="test-group-header">
+                            <a href="?categoryId=${currentCategory.id}&testId=${g.testId}${currentRound ? `&round=${currentRound}` : ''}">${g.testName}</a>
+                            <span class="group-count">${g.problems.length} problems</span>
+                            ${bulkButton(`group-${g.testId}`, label, g.problems)}
+                        </div>
+                        ${shown.map(problemCard).join('')}
+                        ${more > 0
+                            ? `<button class="show-all-btn" onclick="expandGroup('${g.testId}')">Show all ${g.problems.length}</button>`
+                            : ''}
+                    </div>`;
+            }).join('');
+        }
+
+        const wholeTestIdCache = new Map();
+        async function loadWholeTestIds(testId) {
+            if (!wholeTestIdCache.has(testId)) {
+                const data = await getJson(`${API_BASE}/tests/${testId}/problems?limit=1000`);
+                wholeTestIdCache.set(testId, data.data.map(p => p.id));
+            }
+            return wholeTestIdCache.get(testId);
+        }
+
+        function expandGroup(testId) {
+            expandedGroups.add(testId);
+            displayProblems();
+        }
+
+        // ============ Study plan actions ============
         async function toggleStudyPlan(problemId, button) {
-            // Disable button while processing
             button.disabled = true;
             button.textContent = 'Processing...';
 
             const inPlan = await window.studyPlanManager.toggleProblemById(problemId);
+            if (inPlan) planIds.add(problemId); else planIds.delete(problemId);
             button.className = 'add-to-plan-btn' + (inPlan ? ' in-plan' : '');
             button.textContent = inPlan ? '✓ In Study Plan' : '+ Add to Study Plan';
             button.disabled = false;
 
+            refreshBulkButtons();
             await updatePlanCount();
+        }
+
+        async function bulkToggle(key) {
+            const set = bulkSets.get(key);
+            if (!set || set.ids.length === 0) return;
+            const missing = set.ids.filter(id => !planIds.has(id));
+
+            if (missing.length === 0) {
+                // Everything is in: the button removes the whole set
+                const removed = await window.studyPlanManager.removeProblemsById(set.ids);
+                if (removed === null) return showToast('Could not update the study plan');
+                removed.forEach(id => planIds.delete(id));
+                showToast(`Removed ${plural(removed.length, 'problem')} from the plan`, () => undoRemove(removed));
+            } else {
+                if (missing.length > CONFIRM_ABOVE &&
+                    !confirm(`Add ${missing.length} problems to your study plan?`)) return;
+                const added = await window.studyPlanManager.addProblemsById(missing);
+                if (added === null) return showToast('Could not update the study plan');
+                added.forEach(id => planIds.add(id));
+                const already = set.ids.length - missing.length;
+                showToast(`Added ${plural(added.length, 'problem')}` +
+                    (already ? ` (${already} already in the plan)` : ''),
+                    () => undoAdd(added));
+            }
+            await afterPlanChange();
+        }
+
+        // Undo removes exactly what the action added, leaving earlier additions alone
+        async function undoAdd(ids) {
+            const removed = await window.studyPlanManager.removeProblemsById(ids);
+            if (removed) removed.forEach(id => planIds.delete(id));
+            await afterPlanChange();
+        }
+
+        async function undoRemove(ids) {
+            const added = await window.studyPlanManager.addProblemsById(ids);
+            if (added) added.forEach(id => planIds.add(id));
+            await afterPlanChange();
+        }
+
+        async function afterPlanChange() {
+            displayProblems();
+            await updatePlanCount();
+        }
+
+        function plural(n, word) {
+            return `${n} ${word}${n === 1 ? '' : 's'}`;
+        }
+
+        let toastTimer = null;
+        function showToast(message, undo) {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<span>${message}</span>`;
+            if (undo) {
+                const btn = document.createElement('button');
+                btn.textContent = 'Undo';
+                btn.onclick = async () => { hideToast(); await undo(); };
+                toast.appendChild(btn);
+            }
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(hideToast, 10000);
+        }
+
+        function hideToast() {
+            document.getElementById('toast').classList.remove('show');
+        }
+
+        // Re-read plan membership (after switching or creating a plan)
+        async function refreshPlanState() {
+            planIds = await window.studyPlanManager.getProblemIdSet();
+            displayProblems();
         }
 
         function setupFilters() {
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    // Update active state
                     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-
-                    // Filter problems
-                    const filter = btn.dataset.filter;
-                    currentFilter = filter;
-
-                    const filtered = filter === 'all'
-                        ? allProblems
-                        : allProblems.filter(p => p.difficulty === filter);
-
-                    displayProblems(filtered);
+                    currentFilter = btn.dataset.filter;
+                    displayProblems();
                 });
             });
         }
@@ -869,8 +1183,8 @@
             window.location.href = `problem.html?id=${problemId}`;
         }
 
-        // Load data on page load
-        loadData();
+        setupFilters();
+        loadIndex();
     </script>
 
     <!-- Study Plan Management -->
@@ -923,12 +1237,7 @@
             await updatePlanCount();
 
             // Refresh the problem list to show correct "in plan" status
-            if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
-                const filtered = currentFilter === 'all'
-                    ? allProblems
-                    : allProblems.filter(p => p.difficulty === currentFilter);
-                await displayProblems(filtered);
-            }
+            await refreshPlanState();
         }
 
         async function createNewPlan() {
@@ -939,12 +1248,7 @@
                 await updatePlanCount();
 
                 // Refresh the problem list to show correct "in plan" status for new plan
-                if (typeof allProblems !== 'undefined' && allProblems.length > 0) {
-                    const filtered = currentFilter === 'all'
-                        ? allProblems
-                        : allProblems.filter(p => p.difficulty === currentFilter);
-                    await displayProblems(filtered);
-                }
+                await refreshPlanState();
             }
         }
 

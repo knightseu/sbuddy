@@ -319,11 +319,15 @@ class AmcTestImporter implements TestImporter {
 interface MathcountsProblem {
   round: string;
   problemNumber: number;
+  /** Plain text with $...$ math; '\n' is a line break, kept by the viewer (#16). */
   content: string;
   answer: string;
+  /** As printed in the answer blank, e.g. "cm²"; currency such as "$" is shown before the number (#18). */
   answerUnit?: string;
   answerAlternatives?: string[];
+  /** Like content; a figure goes inline as [DIAGRAM: figures/<file>.png] (#17). */
   solutions: string[];
+  /** Paths under figures/, relative to the Test directory. */
   images: string[];
 }
 
@@ -355,8 +359,25 @@ class MathcountsTestImporter implements TestImporter {
     const test: MathcountsTest = JSON.parse(fs.readFileSync(path.join(dir, 'test.json'), 'utf-8'));
     const m = test.metadata;
 
-    // Figures -> public/, which express.static already serves.
+    // Every figure a Problem or Solution points at must exist, so a broken image
+    // never reaches the DB (#17). Checked before anything is written.
     const figSrc = path.join(dir, 'figures');
+    const missing = new Set<string>();
+    for (const p of test.problems) {
+      const refs = [
+        ...(p.images || []),
+        ...(p.solutions || []).flatMap(s => [...s.matchAll(/\[DIAGRAM:\s*([^\]\s]+)\]/g)].map(r => r[1])),
+      ];
+      for (const rel of refs) {
+        const inFigures = rel.startsWith('figures/') && !rel.includes('..');
+        if (!inFigures || !fs.existsSync(path.join(dir, rel))) missing.add(`${p.round} ${p.problemNumber}: ${rel}`);
+      }
+    }
+    if (missing.size) {
+      throw new Error(`figures missing or outside figures/, nothing imported: ${[...missing].join('; ')}`);
+    }
+
+    // Figures -> public/, which express.static already serves.
     if (fs.existsSync(figSrc)) {
       const figDst = path.join(this.publicDir, 'test-images', 'mathcounts', testDir);
       fs.mkdirSync(figDst, { recursive: true });

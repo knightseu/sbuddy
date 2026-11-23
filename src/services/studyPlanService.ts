@@ -222,6 +222,8 @@ export class StudyPlanService {
         spp.added_at as "addedAt",
         spp.completed,
         spp.notes,
+        tp.test_id as "testId",
+        tp.round,
         tp.problem_number as "problemNumber",
         tp.title,
         tp.content,
@@ -269,8 +271,9 @@ export class StudyPlanService {
       notes: row.notes,
       problem: {
         id: row.problemId,
-        testId: '',
+        testId: row.testId,
         testName: row.testName,
+        round: row.round,
         problemNumber: row.problemNumber,
         title: row.title,
         content: row.content,
@@ -386,6 +389,53 @@ export class StudyPlanService {
     const result = await db.query(query, params);
 
     return result.rows[0] || null;
+  }
+
+  /** Ids of every Problem in the plan, so a page can mark them without a request per Problem. */
+  async getProblemIdsInPlan(studyPlanId: string, userId: string): Promise<string[]> {
+    const plan = await this.getStudyPlanById(studyPlanId, userId);
+    if (!plan) {
+      throw new Error('Study plan not found');
+    }
+    const result = await db.query(
+      `SELECT problem_id FROM study_plan_problems WHERE study_plan_id = $1`,
+      [studyPlanId]
+    );
+    return result.rows.map(r => r.problem_id);
+  }
+
+  /**
+   * Add many Problems at once. Problems already in the plan are left alone, and
+   * only the ids actually added are returned, so an Undo can remove exactly those.
+   */
+  async addProblemsToPlan(studyPlanId: string, userId: string, problemIds: string[]): Promise<string[]> {
+    const plan = await this.getStudyPlanById(studyPlanId, userId);
+    if (!plan) {
+      throw new Error('Study plan not found');
+    }
+    const result = await db.query(
+      `INSERT INTO study_plan_problems (study_plan_id, problem_id, completed)
+       SELECT $1, tp.id, false FROM test_problems tp WHERE tp.id = ANY($2::uuid[])
+       ON CONFLICT (study_plan_id, problem_id) DO NOTHING
+       RETURNING problem_id`,
+      [studyPlanId, problemIds]
+    );
+    return result.rows.map(r => r.problem_id);
+  }
+
+  /** Remove many Problems at once; returns the ids that were in the plan. */
+  async removeProblemsFromPlan(studyPlanId: string, userId: string, problemIds: string[]): Promise<string[]> {
+    const plan = await this.getStudyPlanById(studyPlanId, userId);
+    if (!plan) {
+      throw new Error('Study plan not found');
+    }
+    const result = await db.query(
+      `DELETE FROM study_plan_problems
+       WHERE study_plan_id = $1 AND problem_id = ANY($2::uuid[])
+       RETURNING problem_id`,
+      [studyPlanId, problemIds]
+    );
+    return result.rows.map(r => r.problem_id);
   }
 
   async isProblemInPlan(studyPlanId: string, userId: string, problemId: string): Promise<boolean> {

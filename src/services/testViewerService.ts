@@ -21,6 +21,8 @@ export interface Test {
   sourceUrl?: string;
   metadata?: any;
   crawledAt?: Date;
+  /** The Rounds this Test holds, in sitting order. Empty for single-Round Tests (AMC). */
+  rounds?: Array<{ round: string; problemCount: number }>;
 }
 
 export interface Tag {
@@ -36,6 +38,8 @@ export interface Problem {
   id: string;
   testId: string;
   testName?: string;
+  /** NULL for single-Round Tests such as AMC 10. */
+  round?: string | null;
   problemNumber: number;
   title?: string;
   content: string;
@@ -45,7 +49,10 @@ export interface Problem {
   images?: string[];
   answerChoicesImage?: string;
   correctAnswer?: string;
+  answerUnit?: string | null;
+  answerAlternatives?: string[];
   explanation?: string;
+  solutionCount?: number;
   tags?: Tag[];
   choices?: AnswerChoice[];
   solutions?: Solution[];
@@ -71,6 +78,7 @@ export interface Solution {
 
 export interface RelatedProblem {
   id: string;
+  round?: string | null;
   problemNumber: number;
   testName: string;
   relationshipType: string;
@@ -81,6 +89,7 @@ export interface SearchFilters {
   difficulty?: string;
   testCategoryId?: string;
   testId?: string;
+  round?: string;
   year?: number;
   searchQuery?: string;
   page?: number;
@@ -102,6 +111,35 @@ export interface SearchFacets {
   difficulties: Array<{ level: string; count: number }>;
   years: Array<{ year: number; count: number }>;
 }
+
+// Rounds in the order a Test is sat. Unlisted Rounds sort after these, by name;
+// NULL (single-Round Tests) sorts first.
+const ROUND_ORDER = (col: string) =>
+  `COALESCE(array_position(ARRAY['sprint','target','team','countdown','masters'], ${col}), 99), ${col} NULLS FIRST`;
+
+const TEST_ROUNDS = `
+  (SELECT COALESCE(json_agg(json_build_object('round', r.round, 'problemCount', r.n) ORDER BY ${ROUND_ORDER('r.round')}), '[]'::json)
+     FROM (SELECT round, COUNT(*)::int AS n FROM test_problems
+            WHERE test_id = t.id AND round IS NOT NULL GROUP BY round) r) as rounds`;
+
+const PROBLEM_COLUMNS = `
+  tp.id,
+  tp.test_id as "testId",
+  t.name as "testName",
+  tp.round,
+  tp.problem_number as "problemNumber",
+  tp.title,
+  tp.content,
+  tp.difficulty,
+  tp.points,
+  tp.time_limit as "timeLimit",
+  tp.images,
+  tp.answer_choices_image as "answerChoicesImage",
+  tp.correct_answer as "correctAnswer",
+  tp.answer_unit as "answerUnit",
+  tp.answer_alternatives as "answerAlternatives",
+  tp.explanation,
+  (SELECT COUNT(*)::int FROM problem_solutions ps WHERE ps.problem_id = tp.id) as "solutionCount"`;
 
 export class TestViewerService {
   // ============ Test Categories ============
@@ -157,7 +195,8 @@ export class TestViewerService {
         t.problem_count as "problemCount",
         t.source_url as "sourceUrl",
         t.metadata,
-        t.crawled_at as "crawledAt"
+        t.crawled_at as "crawledAt",
+        ${TEST_ROUNDS}
       FROM tests t
       JOIN test_categories tc ON t.category_id = tc.id
       WHERE t.category_id = $1
@@ -196,7 +235,8 @@ export class TestViewerService {
         t.problem_count as "problemCount",
         t.source_url as "sourceUrl",
         t.metadata,
-        t.crawled_at as "crawledAt"
+        t.crawled_at as "crawledAt",
+        ${TEST_ROUNDS}
       FROM tests t
       JOIN test_categories tc ON t.category_id = tc.id
       WHERE t.id = $1
@@ -249,20 +289,7 @@ export class TestViewerService {
     const offset = (page - 1) * limit;
 
     let query = `
-      SELECT
-        tp.id,
-        tp.test_id as "testId",
-        t.name as "testName",
-        tp.problem_number as "problemNumber",
-        tp.title,
-        tp.content,
-        tp.difficulty,
-        tp.points,
-        tp.time_limit as "timeLimit",
-        tp.images,
-        tp.answer_choices_image as "answerChoicesImage",
-        tp.correct_answer as "correctAnswer",
-        tp.explanation
+      SELECT ${PROBLEM_COLUMNS}
       FROM test_problems tp
       JOIN tests t ON tp.test_id = t.id
       WHERE tp.test_id = $1
@@ -270,6 +297,12 @@ export class TestViewerService {
 
     const params: any[] = [testId];
     let paramCount = 1;
+
+    if (filters?.round) {
+      paramCount++;
+      query += ` AND tp.round = $${paramCount}`;
+      params.push(filters.round);
+    }
 
     // Filter by difficulty
     if (filters?.difficulty) {
@@ -296,7 +329,7 @@ export class TestViewerService {
     const total = parseInt(countResult.rows[0].total);
 
     // Add pagination
-    query += ` ORDER BY tp.problem_number LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    query += ` ORDER BY ${ROUND_ORDER('tp.round')}, tp.problem_number LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
     params.push(limit, offset);
 
     const result = await db.query(query, params);
@@ -322,20 +355,7 @@ export class TestViewerService {
 
   async getProblemById(problemId: string, includeRelated: boolean = true): Promise<Problem | null> {
     const result = await db.query(`
-      SELECT
-        tp.id,
-        tp.test_id as "testId",
-        t.name as "testName",
-        tp.problem_number as "problemNumber",
-        tp.title,
-        tp.content,
-        tp.difficulty,
-        tp.points,
-        tp.time_limit as "timeLimit",
-        tp.images,
-        tp.answer_choices_image as "answerChoicesImage",
-        tp.correct_answer as "correctAnswer",
-        tp.explanation
+      SELECT ${PROBLEM_COLUMNS}
       FROM test_problems tp
       JOIN tests t ON tp.test_id = t.id
       WHERE tp.id = $1
@@ -365,6 +385,31 @@ export class TestViewerService {
     return problem;
   }
 
+  /**
+   * Problems across every Test of a Competition, optionally one Round only, in
+   * Test order (newest first) and then sitting order. Unpaginated: the viewer
+   * groups them by Test. Tags are counted, not fetched, to keep this one query.
+   */
+  async getProblemsByCategory(categoryId: string, round?: string): Promise<Problem[]> {
+    const params: any[] = [categoryId];
+    let query = `
+      SELECT ${PROBLEM_COLUMNS},
+        t.year,
+        t.variant,
+        (SELECT COUNT(*)::int FROM problem_tags pt WHERE pt.problem_id = tp.id) as "tagCount"
+      FROM test_problems tp
+      JOIN tests t ON tp.test_id = t.id
+      WHERE t.category_id = $1
+    `;
+    if (round) {
+      params.push(round);
+      query += ` AND tp.round = $2`;
+    }
+    query += ` ORDER BY t.year DESC, t.variant, t.name, ${ROUND_ORDER('tp.round')}, tp.problem_number`;
+    const result = await db.query(query, params);
+    return result.rows;
+  }
+
   async searchProblems(filters: SearchFilters): Promise<PaginatedResult<Problem> & { facets?: SearchFacets }> {
     const page = filters.page || 1;
     const limit = filters.limit || 25;
@@ -375,6 +420,7 @@ export class TestViewerService {
         tp.id,
         tp.test_id as "testId",
         t.name as "testName",
+        tp.round,
         tp.problem_number as "problemNumber",
         tp.title,
         tp.content,
@@ -528,6 +574,7 @@ export class TestViewerService {
     const result = await db.query(`
       SELECT
         tp.id,
+        tp.round,
         tp.problem_number as "problemNumber",
         t.name as "testName",
         rp.relationship_type as "relationshipType"

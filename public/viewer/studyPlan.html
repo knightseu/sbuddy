@@ -260,6 +260,7 @@
         </div>
     </div>
 
+    <script src="rounds.js"></script>
     <script src="studyPlan.js"></script>
     <script>
         let allProblems = [];
@@ -280,9 +281,8 @@
             // Convert [katex]...[/katex] to $...$ for MathJax
             const withLatex = sanitized.replace(/\[katex\](.*?)\[\/katex\]/g, '$$$1$$');
             return withLatex.replace(/\[DIAGRAM:\s*([^\]]+)\]/g, (match, url) => {
-                return `<div style="margin: 12px 0; text-align: center;">
-                    <img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: 100%; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
-                </div>`;
+                // One line: formatProblemContent turns newlines into <br>
+                return `<div style="margin: 12px 0; text-align: center;"><img src="${url.trim()}" alt="Diagram" style="max-width: 100%; width: 100%; height: auto; object-fit: contain; background: white; padding: 8px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" /></div>`;
             });
         }
 
@@ -388,7 +388,7 @@
                     <div class="problem-header">
                         <div>
                             <a href="problem.html?id=${problem.id}" class="problem-number-link">
-                                Problem ${problem.problemNumber}
+                                ${Rounds.problemLabel(problem)}
                             </a>
                             ${problem.testName ? `<span style="color: #6c757d; font-size: 0.9rem; margin-left: 10px;">(${problem.testName})</span>` : ''}
                         </div>

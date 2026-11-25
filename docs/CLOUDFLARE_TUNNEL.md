@@ -102,7 +102,7 @@ The tunnel config is managed remotely: it lives in Cloudflare, not in this repo.
 | Ingress (in order) | `^/viewer(/.*)?$`, `^/test-images/`, `^/api/v1/viewer/`, `^/api/v1/health$` → `http://api:3000`; everything else → `http_status:404` |
 | Redirect rule | `/` → `https://sbuddy.xuanlin.us/viewer/` (302) |
 | Rate-limit rule | POST/PUT/DELETE under `/api/v1/viewer/study-plans`: 20 requests per 10 s per IP, then blocked (429) for 10 s |
-| Connector | `cloudflared` service in `docker-compose.yml`, reading `CLOUDFLARE_TUNNEL_TOKEN` from `.env` |
+| Connector | `cloudflared` service in `docker-compose.yml`, reading `CLOUDFLARE_TUNNEL_TOKEN` from `.env`. `sbuddy.sh deploy` starts it after the API is healthy |
 | API port | Published only on `127.0.0.1` (`API_BIND_IP`), so it's reachable from the Mac itself and nowhere else |
 
 **Rotating the token.** If the token leaks, refresh the tunnel's token in the dashboard, or with the API: `PATCH /accounts/{id}/cfd_tunnel/{id}` with a new `tunnel_secret`. Then update `CLOUDFLARE_TUNNEL_TOKEN` in `.env` and run `docker compose up -d cloudflared`.
@@ -125,6 +125,11 @@ A published port has to name the address it listens on, and there are three prac
 | `127.0.0.1` (current) | Only the Mac itself | No IP dependency. Phones and laptops at home use the public URL, which shows only the viewer. |
 
 Docker has no "LAN only" setting; the only way to say that is to name the LAN address. Chosen on 2026-11-25: `127.0.0.1`. Full-API access from other devices at home wasn't needed. Nothing on the Mac depends on the LAN port either: the scripts use `docker compose exec`, and local tools can use `localhost:3000`. If LAN access is needed again, set `API_BIND_IP` to the LAN IP *and* reserve that IP in DHCP.
+
+## Change log
+
+- **2026-11-25: tunnel live.** The API was first published on `10.0.0.74` instead of `0.0.0.0`, to close the IPv6 exposure.
+- **2026-11-25: API bound to `127.0.0.1`.** A reboot that gives the Mac a new DHCP address (e.g. `10.0.0.101`) would have stopped the API from starting, and the public site would have returned 502. LAN access to the full API was dropped. Home devices use the public URL.
 
 ## Open items
 

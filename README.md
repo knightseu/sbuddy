@@ -129,9 +129,9 @@ The application automatically creates database tables on startup. Ensure Postgre
 
 Copy `.env.example` to `.env` and fill it in. It documents every variable; the server refuses to start if a required one is missing, so placeholder values are provided for external services (Stripe, OpenAI, OAuth, SMTP) that the test viewer doesn't use.
 
-## Running as a Long-Lived Service (LAN)
+## Running as a Long-Lived Service
 
-The full stack (Postgres, Redis, API) runs in Docker with `restart: unless-stopped`, reachable from other devices on your network. Everything is driven by `scripts/sbuddy.sh`:
+The full stack (Postgres, Redis, API, cloudflared) runs in Docker with `restart: unless-stopped` on the Mac mini. The viewer is public at **https://sbuddy.xuanlin.us** through Cloudflare Tunnel; see [docs/CLOUDFLARE_TUNNEL.md](docs/CLOUDFLARE_TUNNEL.md) and [ADR 0001](docs/adr/0001-public-viewer-via-cloudflare-tunnel-from-mac-mini.md). The full API is reachable only from the Mac itself at `http://localhost:3000`. Everything is driven by `scripts/sbuddy.sh`:
 
 ```bash
 scripts/sbuddy.sh deploy             # pull (fast-forward), build, restart, health-check; auto-rollback on failure
@@ -147,17 +147,18 @@ scripts/sbuddy.sh seed               # import crawled_data/ (only into an empty 
 
 **First-time setup**
 
-1. `cp .env.example .env` and set passwords and secrets (`openssl rand -hex 32`).
-2. `scripts/sbuddy.sh deploy --no-pull`. On an empty database this also imports the AMC tests.
-3. Open `http://<this-machine-ip>:3000/viewer/index.html` from any device on the network (`status` prints the exact URL).
+1. `cp .env.example .env` and set passwords and secrets (`openssl rand -hex 32`). Set `CLOUDFLARE_TUNNEL_TOKEN` (tunnel `sbuddy-mac`, see the tunnel doc).
+2. `scripts/sbuddy.sh deploy --no-pull`. On an empty database this also imports the AMC tests. It starts cloudflared once the API is healthy.
+3. Open `https://sbuddy.xuanlin.us/viewer/` from any device, or `http://localhost:3000/viewer/index.html` on the Mac (`status` prints both).
 
 **Updating later**: commit or merge changes, then run `scripts/sbuddy.sh deploy`. It refuses to run with uncommitted changes, pulls with `--ff-only`, keeps the previous image as `sbuddy-api:previous`, and rolls back automatically if the new API fails its health check.
 
 **Notes**
 
 - Configuration comes only from `.env`. The script runs compose in a clean environment, so variables exported in your shell (e.g. `POSTGRES_USER`) are ignored.
-- Only the API port is exposed to the network. Postgres and Redis listen on `127.0.0.1`. This is meant for a trusted LAN over plain HTTP: don't port-forward it to the internet.
-- To survive reboots, enable Docker Desktop > Settings > General > *Start Docker Desktop when you sign in*, and keep the machine from sleeping if other devices rely on it.
+- Nothing listens on the network. The API, Postgres and Redis all publish on `127.0.0.1` only (`API_BIND_IP` sets the API's address). The public site comes in through the tunnel, which only connects outbound, and its ingress rules expose just the viewer. Don't port-forward anything.
+- **No LAN access to the full API (since 2026-11-25).** Other devices at home use the public URL, which only serves the viewer. Binding `0.0.0.0` would also listen on the Mac's public IPv6 address. A LAN IP like `10.0.0.74` stops the API from starting when DHCP changes the address, and that takes the public site down too. To get LAN access back, set `API_BIND_IP` to the Mac's LAN IP *and* reserve it in the router.
+- To survive reboots, enable Docker Desktop > Settings > General > *Start Docker Desktop when you sign in*, and keep the machine from sleeping. Docker Desktop still waits for someone to sign in, so the public site stays down after a reboot until then (#49).
 - `npm run dev` and the stack both use port 3000. Stop the stack (`scripts/sbuddy.sh stop`) before running the dev server.
 - The importer is not idempotent (re-running duplicates solutions), so `seed` only runs on an empty database.
 

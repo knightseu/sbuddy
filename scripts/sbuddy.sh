@@ -3,7 +3,7 @@
 #
 #   scripts/sbuddy.sh deploy [--no-pull]   pull, build, (re)start, health-check, auto-rollback
 #   scripts/sbuddy.sh start | stop | restart
-#   scripts/sbuddy.sh status               containers, health, deployed revision, LAN URL
+#   scripts/sbuddy.sh status               containers, health, deployed revision, URLs
 #   scripts/sbuddy.sh logs [service]       follow logs (default: api)
 #   scripts/sbuddy.sh rollback             return the API to the previously deployed image
 #   scripts/sbuddy.sh seed                 import crawled_data/ into an EMPTY database
@@ -216,6 +216,10 @@ cmd_deploy() {
   fi
 
   seed_if_empty
+
+  # Public viewer through Cloudflare Tunnel (docs/CLOUDFLARE_TUNNEL.md); no-op if already running.
+  log "Starting cloudflared"
+  dc up -d --no-build cloudflared || warn "cloudflared did not start; the public site is down (LAN-local API is fine)"
 
   # Drop superseded sbuddy-api images (only ones carrying our label).
   docker image prune -f --filter label=app=sbuddy-api >/dev/null || true

@@ -46,11 +46,10 @@ dc() {
 
 port() { env_value PORT 3000; }
 
-# Where the API is published: API_BIND_IP (the LAN IPv4) when set, else every interface.
+# Where the API is published (API_BIND_IP, default 127.0.0.1 as in docker-compose.yml).
+api_bind() { env_value API_BIND_IP 127.0.0.1; }
 api_host() {
-  local ip
-  ip=$(env_value API_BIND_IP "")
-  case "$ip" in ""|0.0.0.0) echo localhost ;; *) echo "$ip" ;; esac
+  case "$(api_bind)" in 0.0.0.0|127.0.0.1) echo localhost ;; *) api_bind ;; esac
 }
 
 lan_ip() {
@@ -138,8 +137,12 @@ print_urls() {
   local p
   p=$(port)
   echo
-  [ "$(api_host)" = localhost ] && echo "  This machine:  http://localhost:$p/viewer/index.html"
-  echo "  On your LAN:   http://$(lan_ip):$p/viewer/index.html"
+  case "$(api_bind)" in
+    127.0.0.1) echo "  This machine:  http://localhost:$p/viewer/index.html" ;;
+    0.0.0.0)   echo "  This machine:  http://localhost:$p/viewer/index.html"
+               echo "  On your LAN:   http://$(lan_ip):$p/viewer/index.html" ;;
+    *)         echo "  On your LAN:   http://$(api_bind):$p/viewer/index.html" ;;
+  esac
   echo "  Public:        https://sbuddy.xuanlin.us/viewer/"
   echo
 }

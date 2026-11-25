@@ -59,10 +59,11 @@ services:
     container_name: sbuddy-api
     restart: unless-stopped
     ports:
-      # Published for other devices on the LAN. Set API_BIND_IP in .env to the Mac's LAN IPv4
-      # address: 0.0.0.0 also listens on the Mac's public IPv6 address (docs/CLOUDFLARE_TUNNEL.md).
+      # Published on this Mac only (127.0.0.1); other devices use https://sbuddy.xuanlin.us.
       # The tunnel doesn't use this port; cloudflared reaches api:3000 on the compose network.
-      - "${API_BIND_IP:-0.0.0.0}:${PORT:-3000}:3000"
+      # 0.0.0.0 would also listen on the Mac's public IPv6 address, and a LAN IP breaks startup
+      # when DHCP changes it (docs/CLOUDFLARE_TUNNEL.md).
+      - "${API_BIND_IP:-127.0.0.1}:${PORT:-3000}:3000"
     environment:
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER:-sbuddy}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-sbuddy_db}

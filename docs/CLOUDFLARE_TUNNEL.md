@@ -82,7 +82,7 @@ The tunnel only needs **outbound** access: UDP/TCP 7844 to Cloudflare, plus 443 
 
 **Directly to the home IP: the tunnel changes nothing.** It doesn't open anything, so whatever the router blocks today stays blocked. Two things are worth checking, though:
 
-- **IPv6.** NAT only applies to IPv4. Xfinity gives each device its own public IPv6 address, and the Mac mini has several (`2601:600:…`). For IPv6, the only thing standing between the internet and the Mac is the router's IPv6 firewall. Xfinity gateways block unsolicited inbound IPv6 by default. However, Docker currently publishes port 3000 on **all interfaces, IPv6 included**. So if that firewall were ever relaxed, the whole API (not just the viewer) would be reachable from the internet. The fix (#44) is to publish port 3000 only on `127.0.0.1` or the LAN IPv4 address. `cloudflared` reaches the app over the internal Docker network and doesn't use the published port.
+- **IPv6.** NAT only applies to IPv4. Xfinity gives each device its own public IPv6 address, and the Mac mini has several (`2601:600:…`). For IPv6, the only thing standing between the internet and the Mac is the router's IPv6 firewall. Xfinity gateways block unsolicited inbound IPv6 by default. However, Docker's default `0.0.0.0` publishing listens on **all interfaces, IPv6 included**. So with it, a relaxed firewall would expose the whole API (not just the viewer) to the internet. That's why port 3000 is now published only on `127.0.0.1` (see *Why the API port is bound to `127.0.0.1`*). `cloudflared` reaches the app over the internal Docker network and doesn't use the published port.
 - **Port forwards and UPnP.** Check that the router has no port forwards. Also check that UPnP is off, or that you trust every device using it. UPnP lets devices on the network open ports on the router by themselves.
 
 ## Limits worth knowing
@@ -103,36 +103,33 @@ The tunnel config is managed remotely: it lives in Cloudflare, not in this repo.
 | Redirect rule | `/` → `https://sbuddy.xuanlin.us/viewer/` (302) |
 | Rate-limit rule | POST/PUT/DELETE under `/api/v1/viewer/study-plans`: 20 requests per 10 s per IP, then blocked (429) for 10 s |
 | Connector | `cloudflared` service in `docker-compose.yml`, reading `CLOUDFLARE_TUNNEL_TOKEN` from `.env` |
-| API port | Published only on `API_BIND_IP` (the Mac's LAN IPv4, `10.0.0.74`), so it's not reachable over IPv6 |
-
-**Keep the LAN IP fixed.** If DHCP gives the Mac a different address, the API container can't bind `API_BIND_IP` and won't start. Reserve `10.0.0.74` for the Mac mini in the router's DHCP settings, or update `.env` if the address changes.
+| API port | Published only on `127.0.0.1` (`API_BIND_IP`), so it's reachable from the Mac itself and nowhere else |
 
 **Rotating the token.** If the token leaks, refresh the tunnel's token in the dashboard, or with the API: `PATCH /accounts/{id}/cfd_tunnel/{id}` with a new `tunnel_secret`. Then update `CLOUDFLARE_TUNNEL_TOKEN` in `.env` and run `docker compose up -d cloudflared`.
 
 **Checking it from outside:** `curl -I https://sbuddy.xuanlin.us/api/v1/health` should return 200, and `/api/v1/auth/register` should return 404.
 
-## Why the API port is bound to `10.0.0.74`
+## Why the API port is bound to `127.0.0.1`
 
 There are two separate ways in, and they don't depend on each other:
 
 - **The public path:** browser → Cloudflare → tunnel → `cloudflared` → `api:3000`. This runs entirely inside Docker's internal network. It doesn't use the published port, so the bind address has no effect on the public site.
-- **The LAN path:** a device in the house connects to `http://10.0.0.74:3000`. The `ports:` line in `docker-compose.yml` exists only for this. Through it you get the *whole* API, not just the viewer: auth, imports, OCR, and so on.
+- **The LAN path:** a device in the house connects to `http://<mac-lan-ip>:3000`. The `ports:` line in `docker-compose.yml` exists only for this. Through it you get the *whole* API, not just the viewer: auth, imports, OCR, and so on.
 
 A published port has to name the address it listens on, and there are three practical choices:
 
 | Bind address | Who can reach port 3000 | Trade-off |
 |---|---|---|
 | `0.0.0.0` (the old default) | Every interface, including the Mac's **public IPv6 addresses** | Only the Xfinity IPv6 firewall keeps the internet away from the full API. That's one layer, and it isn't ours to control. |
-| `10.0.0.74` (current) | Devices on the home LAN, over IPv4 only | The API can't start if the Mac's IP changes. Fix that with a DHCP reservation. |
-| `127.0.0.1` | Only the Mac itself | No IP dependency, but phones and laptops at home lose LAN access. They'd use the public URL, which shows only the viewer. |
+| A LAN IPv4, e.g. `10.0.0.74` | Devices on the home LAN, over IPv4 only | If DHCP gives the Mac a new IP (say `10.0.0.101` after a reboot), Docker fails with `bind: can't assign requested address`. The API won't start, and the public site returns 502. You'd need a DHCP reservation. |
+| `127.0.0.1` (current) | Only the Mac itself | No IP dependency. Phones and laptops at home use the public URL, which shows only the viewer. |
 
-Docker has no "LAN only" setting, so naming the LAN address is the way to say that. Nothing on the Mac itself depends on port 3000: the scripts reach the API with `docker compose exec`. So if LAN access stops mattering, `API_BIND_IP=127.0.0.1` is the simpler choice.
+Docker has no "LAN only" setting; the only way to say that is to name the LAN address. Chosen on 2026-11-25: `127.0.0.1`. Full-API access from other devices at home wasn't needed. Nothing on the Mac depends on the LAN port either: the scripts use `docker compose exec`, and local tools can use `localhost:3000`. If LAN access is needed again, set `API_BIND_IP` to the LAN IP *and* reserve that IP in DHCP.
 
 ## Open items
 
 These are known gaps, left on purpose for now:
 
-- **Reserve `10.0.0.74` in DHCP.** In the Xfinity app or gateway, reserve the address for the Mac mini. Otherwise a lease change keeps the API from starting (see above).
 - **Tunnel token exposure.** The token was handled in an agent session during setup on 2026-11-25. If you'd rather it had never left the machine, rotate it (see *Rotating the token*).
 - **The rest of #44 is not done, and the viewer doesn't need it yet:**
   - CORS is still `origin: '*'`. The viewer only calls its own origin, and its API takes no cookies or credentials, so a cross-site page gains nothing.

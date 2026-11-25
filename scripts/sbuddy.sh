@@ -46,6 +46,13 @@ dc() {
 
 port() { env_value PORT 3000; }
 
+# Where the API is published: API_BIND_IP (the LAN IPv4) when set, else every interface.
+api_host() {
+  local ip
+  ip=$(env_value API_BIND_IP "")
+  case "$ip" in ""|0.0.0.0) echo localhost ;; *) echo "$ip" ;; esac
+}
+
 lan_ip() {
   local ip=""
   if command -v ipconfig >/dev/null 2>&1; then # macOS
@@ -67,7 +74,7 @@ require_env_file() {
 # Containers with our names that were created outside this compose project block `up`.
 check_name_conflicts() {
   local name label
-  for name in sbuddy-postgres sbuddy-redis sbuddy-api; do
+  for name in sbuddy-postgres sbuddy-redis sbuddy-api sbuddy-cloudflared; do
     if docker container inspect "$name" >/dev/null 2>&1; then
       label=$(docker container inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$name")
       if [ "$label" != "$PROJECT" ]; then
@@ -93,9 +100,9 @@ wait_for_api() {
   local p deadline state
   p=$(port)
   deadline=$((SECONDS + HEALTH_TIMEOUT))
-  log "Waiting for API health on http://localhost:$p/api/v1/health (up to ${HEALTH_TIMEOUT}s)"
+  log "Waiting for API health on http://$(api_host):$p/api/v1/health (up to ${HEALTH_TIMEOUT}s)"
   while [ $SECONDS -lt $deadline ]; do
-    if curl -fsS "http://localhost:$p/api/v1/health" >/dev/null 2>&1; then
+    if curl -fsS "http://$(api_host):$p/api/v1/health" >/dev/null 2>&1; then
       log "API is healthy"
       return 0
     fi
@@ -131,8 +138,9 @@ print_urls() {
   local p
   p=$(port)
   echo
-  echo "  This machine:  http://localhost:$p/viewer/index.html"
+  [ "$(api_host)" = localhost ] && echo "  This machine:  http://localhost:$p/viewer/index.html"
   echo "  On your LAN:   http://$(lan_ip):$p/viewer/index.html"
+  echo "  Public:        https://sbuddy.xuanlin.us/viewer/"
   echo
 }
 
@@ -229,7 +237,7 @@ cmd_status() {
   dc ps
   p=$(port)
   echo
-  if curl -fsS "http://localhost:$p/api/v1/health" >/dev/null 2>&1; then
+  if curl -fsS "http://$(api_host):$p/api/v1/health" >/dev/null 2>&1; then
     echo "API health:  ok"
   else
     echo "API health:  DOWN"

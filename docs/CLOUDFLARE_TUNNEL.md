@@ -90,3 +90,23 @@ The tunnel only needs **outbound** access: UDP/TCP 7844 to Cloudflare, plus 443 
 - **Cloudflare sees the plaintext.** TLS ends at Cloudflare, so Cloudflare can read the traffic. That's fine for public study content.
 - **If the house is down, the site is down.** That includes a power cut, an internet outage, a reboot, or Docker not running. Cloudflare can only pass traffic to a machine that's there to answer. Recovery after a reboot is tracked in #49.
 - **The ingress rules are the security boundary.** A route that isn't listed is unreachable from outside, and that's deliberate. A new public route has to be added on purpose.
+
+## Current setup
+
+The tunnel config is managed remotely: it lives in Cloudflare, not in this repo. Change it in the Zero Trust dashboard (Networks → Tunnels → `sbuddy-mac`) or through the API.
+
+| Piece | Value |
+|---|---|
+| Tunnel | `sbuddy-mac` (`cec580a5-2fe4-43ff-a0ed-7bf62b1b497d`), config managed remotely |
+| DNS | `sbuddy.xuanlin.us` CNAME → `<tunnel-id>.cfargotunnel.com`, proxied |
+| Ingress (in order) | `^/viewer(/.*)?$`, `^/test-images/`, `^/api/v1/viewer/`, `^/api/v1/health$` → `http://api:3000`; everything else → `http_status:404` |
+| Redirect rule | `/` → `https://sbuddy.xuanlin.us/viewer/` (302) |
+| Rate-limit rule | POST/PUT/DELETE under `/api/v1/viewer/study-plans`: 20 requests per 10 s per IP, then blocked (429) for 10 s |
+| Connector | `cloudflared` service in `docker-compose.yml`, reading `CLOUDFLARE_TUNNEL_TOKEN` from `.env` |
+| API port | Published only on `API_BIND_IP` (the Mac's LAN IPv4, `10.0.0.74`), so it's not reachable over IPv6 |
+
+**Keep the LAN IP fixed.** If DHCP gives the Mac a different address, the API container can't bind `API_BIND_IP` and won't start. Reserve `10.0.0.74` for the Mac mini in the router's DHCP settings, or update `.env` if the address changes.
+
+**Rotating the token.** If the token leaks, refresh the tunnel's token in the dashboard, or with the API: `PATCH /accounts/{id}/cfd_tunnel/{id}` with a new `tunnel_secret`. Then update `CLOUDFLARE_TUNNEL_TOKEN` in `.env` and run `docker compose up -d cloudflared`.
+
+**Checking it from outside:** `curl -I https://sbuddy.xuanlin.us/api/v1/health` should return 200, and `/api/v1/auth/register` should return 404.

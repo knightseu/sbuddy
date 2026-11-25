@@ -1,5 +1,6 @@
 # Long-running local deployment. Manage with scripts/sbuddy.sh (deploy, status, logs, ...).
 # Only the API is published on the LAN; Postgres and Redis listen on 127.0.0.1 only.
+# cloudflared publishes the viewer to the internet through Cloudflare Tunnel (docs/CLOUDFLARE_TUNNEL.md).
 
 x-logging: &default-logging
   driver: json-file
@@ -58,8 +59,10 @@ services:
     container_name: sbuddy-api
     restart: unless-stopped
     ports:
-      # Published on all interfaces so other devices on the LAN can reach it
-      - "0.0.0.0:${PORT:-3000}:3000"
+      # Published for other devices on the LAN. Set API_BIND_IP in .env to the Mac's LAN IPv4
+      # address: 0.0.0.0 also listens on the Mac's public IPv6 address (docs/CLOUDFLARE_TUNNEL.md).
+      # The tunnel doesn't use this port; cloudflared reaches api:3000 on the compose network.
+      - "${API_BIND_IP:-0.0.0.0}:${PORT:-3000}:3000"
     environment:
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER:-sbuddy}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-sbuddy_db}
@@ -131,6 +134,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging: *default-logging
+
+  # Cloudflare Tunnel: serves the public viewer at https://sbuddy.xuanlin.us (ADR 0001).
+  # Ingress rules (which paths are public) live in the tunnel's remote config on Cloudflare,
+  # not here. Needs CLOUDFLARE_TUNNEL_TOKEN in .env.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: sbuddy-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      api:
+        condition: service_healthy
     logging: *default-logging
 
   # OCR Service (Surya) - Optional, comment out if using external OCR

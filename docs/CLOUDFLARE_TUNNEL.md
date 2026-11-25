@@ -110,3 +110,35 @@ The tunnel config is managed remotely: it lives in Cloudflare, not in this repo.
 **Rotating the token.** If the token leaks, refresh the tunnel's token in the dashboard, or with the API: `PATCH /accounts/{id}/cfd_tunnel/{id}` with a new `tunnel_secret`. Then update `CLOUDFLARE_TUNNEL_TOKEN` in `.env` and run `docker compose up -d cloudflared`.
 
 **Checking it from outside:** `curl -I https://sbuddy.xuanlin.us/api/v1/health` should return 200, and `/api/v1/auth/register` should return 404.
+
+## Why the API port is bound to `10.0.0.74`
+
+There are two separate ways in, and they don't depend on each other:
+
+- **The public path:** browser → Cloudflare → tunnel → `cloudflared` → `api:3000`. This runs entirely inside Docker's internal network. It doesn't use the published port, so the bind address has no effect on the public site.
+- **The LAN path:** a device in the house connects to `http://10.0.0.74:3000`. The `ports:` line in `docker-compose.yml` exists only for this. Through it you get the *whole* API, not just the viewer: auth, imports, OCR, and so on.
+
+A published port has to name the address it listens on, and there are three practical choices:
+
+| Bind address | Who can reach port 3000 | Trade-off |
+|---|---|---|
+| `0.0.0.0` (the old default) | Every interface, including the Mac's **public IPv6 addresses** | Only the Xfinity IPv6 firewall keeps the internet away from the full API. That's one layer, and it isn't ours to control. |
+| `10.0.0.74` (current) | Devices on the home LAN, over IPv4 only | The API can't start if the Mac's IP changes. Fix that with a DHCP reservation. |
+| `127.0.0.1` | Only the Mac itself | No IP dependency, but phones and laptops at home lose LAN access. They'd use the public URL, which shows only the viewer. |
+
+Docker has no "LAN only" setting, so naming the LAN address is the way to say that. Nothing on the Mac itself depends on port 3000: the scripts reach the API with `docker compose exec`. So if LAN access stops mattering, `API_BIND_IP=127.0.0.1` is the simpler choice.
+
+## Open items
+
+These are known gaps, left on purpose for now:
+
+- **Reserve `10.0.0.74` in DHCP.** In the Xfinity app or gateway, reserve the address for the Mac mini. Otherwise a lease change keeps the API from starting (see above).
+- **Tunnel token exposure.** The token was handled in an agent session during setup on 2026-11-25. If you'd rather it had never left the machine, rotate it (see *Rotating the token*).
+- **The rest of #44 is not done, and the viewer doesn't need it yet:**
+  - CORS is still `origin: '*'`. The viewer only calls its own origin, and its API takes no cookies or credentials, so a cross-site page gains nothing.
+  - Express `trust proxy` isn't set, so `req.ip` is the `cloudflared` container for public requests. That only matters for the in-app `rateLimiter`, which guards non-public routes. Cloudflare does the public rate limiting.
+  - `FRONTEND_URL`, `API_URL` and `SESSION_COOKIE_SECURE` are unchanged. They're only used by OAuth and email flows, which aren't exposed.
+
+  Revisit all of these before any non-viewer route goes public, or when accounts arrive (#6).
+- **Unattended restart (#49).** Docker Desktop starts only when someone logs in to the Mac, so after a reboot the site stays down until someone signs in.
+- **`cloudflared` image is `latest`.** Each `docker compose pull` or recreate can pick up a new version. Pin a tag, such as `cloudflare/cloudflared:<version>`, if you want to upgrade only when you choose.

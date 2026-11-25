@@ -11,11 +11,11 @@ A family of contests that share a format, such as MATHCOUNTS or AMC 10.
 _Avoid_: Test category, test type, exam type
 
 **Test**:
-One published sitting of a Competition, such as "MATHCOUNTS 2025 Chapter" or "AMC 10A 2025". Each MATHCOUNTS level (School, Chapter, State, National, Practice) and each numbered practice set is a separate Test. The level is recorded as the Test's variant, as AMC's A and B are; it is not a layer of its own.
+One published sitting of a Competition, such as "MATHCOUNTS 2025 Chapter" or "AMC 10A 2025". Each MATHCOUNTS level (School, Chapter, State, National, Practice) and each numbered practice set is a separate Test. The level is recorded as the Test's variant, as AMC's A and B are; it is not a layer of its own. A sitting given on the same papers as another, such as BMT's online sitting, is not a separate Test.
 _Avoid_: Exam, paper, contest
 
 **Round**:
-A separately administered part of a Test, such as Sprint, Target, Team or Countdown. A Test with no named parts, such as an AMC 10, has a single Round.
+A separately administered part of a Test, such as Sprint, Target, Team or Countdown. A Test with no named parts, such as an AMC 10, has a single Round. A Round that students choose between, such as one of BMT's subject Focus rounds (Algebra, Geometry…), is still its own Round, even though each student sits only one of them.
 _Avoid_: Component, section, part
 
 **Round format**:

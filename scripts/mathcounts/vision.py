@@ -70,6 +70,8 @@ Output, per work directory (DIR is --out, default vision):
 
 OPENROUTER_API_KEY comes from the environment or the repo's .env; it is
 needed only when a pass uses OpenRouter.
+
+Runbook: docs/MATHCOUNTS_VISION.md.
 """
 
 import argparse

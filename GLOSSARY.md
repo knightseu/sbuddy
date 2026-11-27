@@ -27,8 +27,16 @@ One numbered question in a Round, identified by its Test, Round and number.
 _Avoid_: Question, item
 
 **Answer**:
-The official result of a Problem, revealed after an attempt and graded by the student, never checked automatically. A Problem may also have accepted alternative forms of its Answer.
+The official result of a Problem, revealed after an attempt and graded by the student, never checked automatically. A Problem may also have accepted alternative forms of its Answer. A Problem with no fixed Answer, such as one scored against other teams' submissions, is not included.
 _Avoid_: Solution, key, correct answer
+
+**Estimation Problem**:
+A Problem scored by how close an attempt is to its Answer rather than by an exact match. Its scoring rule is part of the Problem.
+_Avoid_: Approximation problem, closeness problem
+
+**Open-choice Problem**:
+A Problem where any attempt that meets a stated target earns full credit, so its Answer describes the target rather than giving a single value.
+_Avoid_: Free-answer problem
 
 **Answer unit**:
 The unit printed with a Problem's answer blank, such as "cm²" or "years old". It is part of how the Answer is read, not part of the Answer itself; most go after the number, but currency such as "$" goes before it.
